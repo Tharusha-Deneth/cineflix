@@ -44,7 +44,6 @@ export default function App() {
   // 🛡️ ADBLOCK DETECTOR 🛡️
   useEffect(() => {
     const detectAdBlock = () => {
-      // Create a fake ad element
       const adTest = document.createElement('div');
       adTest.innerHTML = '&nbsp;';
       adTest.className = 'adsbox ad-placement doubleclick ad-placeholder';
@@ -53,7 +52,6 @@ export default function App() {
       adTest.style.height = '10px';
       document.body.appendChild(adTest);
 
-      // Check if browser hid or removed it
       setTimeout(() => {
         const isBlocked = adTest.offsetHeight === 0 || window.getComputedStyle(adTest).display === 'none';
         if (isBlocked) {
@@ -89,7 +87,7 @@ export default function App() {
     }
   }, [appState]);
 
-  // IF ADBLOCK IS DETECTED, SHOW FULL SCREEN WARNING AND BLOCK SITE
+  // IF ADBLOCK IS DETECTED, SHOW WARNING AND BLOCK SITE
   if (hasAdBlock) {
     return (
       <div style={{
@@ -226,7 +224,6 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      // ⚠️ Real error reason will be shown here
       console.error(error);
       if (error.code === 'auth/popup-closed-by-user') {
         setErrorMsg("Sign-in popup was closed before completing.");
@@ -344,18 +341,6 @@ function MovieApp({ user, setAppState, setUser }) {
   const [activeServer, setActiveServer] = useState(1);
 
   const carouselRef = useRef(null);
-
-  // 🔥 MOVED HERE: Global Click Ad trigger ONLY WHEN ON HOME SCREEN 🔥
-  useEffect(() => {
-    const handleGlobalClick = () => {
-      if (!sessionStorage.getItem('first_click_ad_triggered')) {
-        triggerPopUnderAds();
-        sessionStorage.setItem('first_click_ad_triggered', 'true');
-      }
-    };
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
-  }, []);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -499,6 +484,17 @@ function MovieApp({ user, setAppState, setUser }) {
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
           .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
           .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
+          
+          /* FIXED: Fullscreen Player Header Setup */
+          .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; flex-direction: column; }
+          .player-header { width: 100%; min-height: 60px; background-color: #111; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10000; border-bottom: 2px solid #222; }
+          .server-selector { display: flex; gap: 8px; align-items: center; }
+          .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
+          .server-btn.active { background: #E50914; border-color: #E50914; }
+          .close-player-btn { background: rgba(0,0,0,0.7); color: white; border: 2px solid white; border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+          .close-player-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
+          .player-iframe { width: 100%; flex-grow: 1; border: none; background-color: #000; }
+          
           .showcase-view { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #0b0b0b; z-index: 500; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; justify-content: space-between; animation: fadeIn 0.4s ease-out; }
           .showcase-bg-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
           .showcase-bg-video { width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0.85; }
@@ -529,14 +525,7 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-cards-scroll { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch; } .showcase-cards-scroll::-webkit-scrollbar { display: none; }
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
-          .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; flex-direction: column; }
-          .player-header { position: absolute; top: 0; left: 0; width: 100%; height: 60px; background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10000; }
-          .server-selector { display: flex; gap: 8px; align-items: center; }
-          .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
-          .server-btn.active { background: #E50914; border-color: #E50914; }
-          .close-player-btn { background: rgba(0,0,0,0.7); color: white; border: 2px solid white; border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-          .close-player-btn:hover { background: #E50914; border-color: #E50914; }
-          .player-iframe { width: 100%; height: 100%; border: none; }
+
           @media screen and (min-width: 900px) {
             .app-container { padding-bottom: 0; } .mobile-header, .bottom-nav { display: none; }
             .sidebar { display: flex; position: fixed; top: 0; left: 0; width: 80px; height: 100vh; background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%); flex-direction: column; align-items: center; padding-top: 30px; gap: 40px; z-index: 200; }
