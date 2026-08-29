@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-// --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 
-// 👇 මෙතනට ඔයාගේ Firebase Config එක Paste කරන්න 👇
+// 👇 Firebase Config 👇
 const firebaseConfig = {
   apiKey: "AIzaSyAfuAJn5pfVvsj_CHGjQT_PaOY2KzvMbnk",
   authDomain: "cineflix-71ade.firebaseapp.com",
@@ -14,19 +12,48 @@ const firebaseConfig = {
   appId: "1:703022116674:web:1ce08f947669eb668a62db"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
-// -------------------------
+
+// 🔥 ADSTERRA DIRECT LINK 🔥
+const ADSTERRA_DIRECT_LINK = "https://www.profitableratecpmnetwork.com/prw0pm5gz?key=1c776249816d480c305463fd75cb4f5f"; 
 
 const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
+// 🚀 Magic Pop-Under Function (Opens 2 background tabs) 🚀
+const triggerPopUnderAds = () => {
+  const windowName1 = 'adWindow' + Math.random();
+  const windowName2 = 'adWindow' + Math.random();
+  
+  const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
+  const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
+
+  // Move the newly opened ad windows to the background by refocusing on the current window
+  if (pop1) pop1.blur();
+  if (pop2) pop2.blur();
+  window.focus(); 
+};
+
 export default function App() {
   const [appState, setAppState] = useState('splash'); 
   const [user, setUser] = useState(null);
+
+  // Global Click Listener for the first interaction pop-under
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      // Only trigger once per session to avoid annoying the user too much immediately
+      if (!sessionStorage.getItem('first_click_ad_triggered')) {
+        triggerPopUnderAds();
+        sessionStorage.setItem('first_click_ad_triggered', 'true');
+      }
+    };
+    
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('cineflix_current_user');
@@ -46,9 +73,7 @@ export default function App() {
     }
 
     if (appState === 'splash') {
-      const timer = setTimeout(() => {
-        setAppState(nextState);
-      }, 7000);
+      const timer = setTimeout(() => setAppState(nextState), 7000);
       return () => clearTimeout(timer);
     }
   }, [appState]);
@@ -62,49 +87,27 @@ export default function App() {
             margin: 0 !important; padding: 0 !important;
             width: 100vw !important; max-width: 100vw !important;
             overflow-x: hidden !important; font-family: 'Montserrat', sans-serif;
-            background-color: #0b0b0b;
-            color: #ffffff;
-            -webkit-tap-highlight-color: transparent;
+            background-color: #0b0b0b; color: #ffffff; -webkit-tap-highlight-color: transparent;
           }
           * { box-sizing: border-box; }
         `}
       </style>
-
       {appState === 'splash' && <SplashScreen />}
-      {(appState === 'login' || appState === 'signup') && (
-        <AuthScreen appState={appState} setAppState={setAppState} setUser={setUser} />
-      )}
+      {(appState === 'login' || appState === 'signup') && <AuthScreen appState={appState} setAppState={setAppState} setUser={setUser} />}
       {appState === 'home' && <MovieApp user={user} setAppState={setAppState} setUser={setUser} />}
     </>
   );
 }
 
-// 1. SPLASH SCREEN
 function SplashScreen() {
-  const appName = "CINEFLIX"; 
-  const letters = appName.split("");
-
+  const letters = "CINEFLIX".split("");
   return (
     <div className="splash-container">
       <style>
         {`
-          .splash-container {
-            width: 100vw; height: 100vh; background-color: #000;
-            display: flex; justify-content: center; align-items: center;
-            perspective: 1000px; overflow: hidden;
-          }
-          .splash-title {
-            display: flex; font-size: clamp(2.5rem, 8vw, 6rem); font-weight: 900;
-            font-family: 'Unbounded', sans-serif;
-            letter-spacing: clamp(4px, 1.5vw, 12px); transform-style: preserve-3d;
-          }
-          .cinematic-letter {
-            display: inline-block; opacity: 0; color: #E50914;
-            text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.4);
-            animation: cinematicSequence 6s forwards ease-in-out;
-          }
-          .cinematic-letter:empty::before { content: "\\00a0"; }
-
+          .splash-container { width: 100vw; height: 100vh; background-color: #000; display: flex; justify-content: center; align-items: center; perspective: 1000px; overflow: hidden; }
+          .splash-title { display: flex; font-size: clamp(2.5rem, 8vw, 6rem); font-weight: 900; font-family: 'Unbounded', sans-serif; letter-spacing: clamp(4px, 1.5vw, 12px); transform-style: preserve-3d; }
+          .cinematic-letter { display: inline-block; opacity: 0; color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.4); animation: cinematicSequence 6s forwards ease-in-out; }
           @keyframes cinematicSequence {
             0% { opacity: 0; transform: translateZ(-300px) scale(0.5); }
             15% { opacity: 1; transform: translateZ(0) scale(1); color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); }
@@ -118,22 +121,16 @@ function SplashScreen() {
         `}
       </style>
       <div className="splash-title">
-        {letters.map((char, index) => (
-          <span key={index} className="cinematic-letter" style={{ animationDelay: `${index * 0.15}s` }}>
-            {char}
-          </span>
-        ))}
+        {letters.map((char, index) => <span key={index} className="cinematic-letter" style={{ animationDelay: `${index * 0.15}s` }}>{char}</span>)}
       </div>
     </div>
   );
 }
 
-// 2. AUTH SCREEN (FIREBASE INTEGRATED)
 function AuthScreen({ appState, setAppState, setUser }) {
   const isLogin = appState === 'login';
   const [showPass, setShowPass] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -147,9 +144,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
   ];
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % sliderImages.length);
-    }, 4000);
+    const interval = setInterval(() => setCurrentSlide((prev) => (prev + 1) % sliderImages.length), 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -164,38 +159,21 @@ function AuthScreen({ appState, setAppState, setUser }) {
     e.preventDefault();
     setErrorMsg('');
     setLoading(true);
-
     try {
       if (isLogin) {
-        // Firebase Login
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        saveSessionAndNavigate({
-          id: userCredential.user.uid,
-          name: userCredential.user.displayName || email.split('@')[0],
-          email: userCredential.user.email
-        });
+        saveSessionAndNavigate({ id: userCredential.user.uid, name: userCredential.user.displayName || email.split('@')[0], email: userCredential.user.email });
       } else {
-        // Firebase Sign Up
-        if (!fullName) {
-          setErrorMsg("Full Name is required");
-          setLoading(false);
-          return;
-        }
+        if (!fullName) { setErrorMsg("Full Name is required"); setLoading(false); return; }
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        saveSessionAndNavigate({
-          id: userCredential.user.uid,
-          name: fullName,
-          email: userCredential.user.email
-        });
+        saveSessionAndNavigate({ id: userCredential.user.uid, name: fullName, email: userCredential.user.email });
       }
     } catch (error) {
       if (error.code === 'auth/email-already-in-use') setErrorMsg('Email is already registered. Please Log In.');
       else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setErrorMsg('Invalid email or password.');
       else if (error.code === 'auth/weak-password') setErrorMsg('Password should be at least 6 characters.');
       else setErrorMsg(error.message);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleGoogleSignIn = async () => {
@@ -203,16 +181,10 @@ function AuthScreen({ appState, setAppState, setUser }) {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      saveSessionAndNavigate({
-        id: result.user.uid,
-        name: result.user.displayName || 'Google User',
-        email: result.user.email
-      });
+      saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
       setErrorMsg("Google Sign-In failed or cancelled.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
@@ -220,199 +192,81 @@ function AuthScreen({ appState, setAppState, setUser }) {
       <style>
         {`
           @import url('https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css');
-          
-          .auth-wrapper {
-            background-color: #141414; width: 100vw; min-height: 100vh;
-            display: flex; justify-content: center; align-items: center;
-            padding: 1rem;
-            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.95)), url('https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/US-en-20220502-popsignuptwoweeks-perspective_alpha_website_large.jpg');
-            background-size: cover; background-position: center;
-          }
-
-          .login__container {
-            background-color: #181818; box-shadow: 0 15px 50px rgba(0,0,0,0.9);
-            padding: 2.2rem 1.5rem; border-radius: 1.75rem; display: grid; gap: 1.2rem;
-            width: 100%; max-width: 440px; color: #ffffff;
-            animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          }
-
-          @keyframes slideDown {
-            0% { opacity: 0; transform: translateY(-40px); }
-            100% { opacity: 1; transform: translateY(0); }
-          }
-
+          .auth-wrapper { background-color: #141414; width: 100vw; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 1rem; background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.95)), url('https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/US-en-20220502-popsignuptwoweeks-perspective_alpha_website_large.jpg'); background-size: cover; background-position: center; }
+          .login__container { background-color: #181818; box-shadow: 0 15px 50px rgba(0,0,0,0.9); padding: 2.2rem 1.5rem; border-radius: 1.75rem; display: grid; gap: 1.2rem; width: 100%; max-width: 440px; color: #ffffff; animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+          @keyframes slideDown { 0% { opacity: 0; transform: translateY(-40px); } 100% { opacity: 1; transform: translateY(0); } }
           .login__swiper { display: none; }
           .login__data { text-align: center; color: #ffffff; }
-          .logo-title {
-            font-family: 'Unbounded', sans-serif; font-size: clamp(1.8rem, 5vw, 2.2rem); font-weight: 900;
-            color: #E50914; letter-spacing: 2px; margin-bottom: 0.25rem;
-            text-transform: uppercase; text-shadow: 2px 2px 8px rgba(229,9,20,0.4);
-          }
+          .logo-title { font-family: 'Unbounded', sans-serif; font-size: clamp(1.8rem, 5vw, 2.2rem); font-weight: 900; color: #E50914; letter-spacing: 2px; margin-bottom: 0.25rem; text-transform: uppercase; text-shadow: 2px 2px 8px rgba(229,9,20,0.4); }
           .login__title { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.25rem; }
           .login__description { font-size: 0.82rem; color: #b3b3b3; margin-bottom: 1.25rem; }
-
-          .error-alert {
-            background: rgba(229,9,20,0.15); border: 1px solid #E50914; color: #ff6b6b;
-            padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 15px; text-align: center;
-          }
-
-          .google-btn-custom {
-            width: 100%; padding: 0.85rem; border-radius: 0.5rem; font-weight: 600;
-            background-color: #ffffff; color: #000000; cursor: pointer; border: none;
-            display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem;
-            transition: 0.3s;
-          }
+          .error-alert { background: rgba(229,9,20,0.15); border: 1px solid #E50914; color: #ff6b6b; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 15px; text-align: center; }
+          .google-btn-custom { width: 100%; padding: 0.85rem; border-radius: 0.5rem; font-weight: 600; background-color: #ffffff; color: #000000; cursor: pointer; border: none; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem; transition: 0.3s; }
           .google-btn-custom:hover { background-color: #f1f1f1; box-shadow: 0 4px 15px rgba(255,255,255,0.2); }
-
-          .login__line {
-            position: relative; display: flex; justify-content: center; text-align: center;
-            font-weight: 600; color: #777; font-size: 0.85rem; margin: 0.8rem 0;
-          }
-          .login__line::before, .login__line::after {
-            content: ""; position: absolute; top: 50%; width: 35%; height: 1px; background-color: #333;
-          }
+          .login__line { position: relative; display: flex; justify-content: center; text-align: center; font-weight: 600; color: #777; font-size: 0.85rem; margin: 0.8rem 0; }
+          .login__line::before, .login__line::after { content: ""; position: absolute; top: 50%; width: 35%; height: 1px; background-color: #333; }
           .login__line::before { right: 0; } .login__line::after { left: 0; }
-
           .login__box { position: relative; display: flex; align-items: center; margin-bottom: 0.85rem; }
-          .login__input {
-            width: 100%; background: #222; border: 1px solid #333; padding: 0.85rem 1rem;
-            border-radius: 0.5rem; color: #fff; font-weight: 600; font-size: 0.95rem; transition: 0.3s;
-          }
-          .login__input::placeholder { color: #888; }
-          .login__input:focus { border-color: #E50914; outline: none; background: #2a2a2a; }
-          .login__box i { position: absolute; right: 1rem; font-size: 1.2rem; color: #aaa; }
-          .login__eye { cursor: pointer; z-index: 10; }
-
-          .login__forgot { display: block; text-align: right; font-size: 0.82rem; color: #b3b3b3; margin-bottom: 1.1rem; text-decoration: none; }
-          .login__forgot:hover { color: #E50914; text-decoration: underline; }
-          
-          .login__button {
-            width: 100%; padding: 0.85rem; border-radius: 0.5rem; font-weight: 600;
-            background-color: #E50914; color: #fff; cursor: pointer; transition: 0.3s; border: none; font-size: 1rem;
-          }
-          .login__button:hover { background-color: #c90812; box-shadow: 0 4px 15px rgba(229,9,20,0.5); }
-          .login__button:disabled { opacity: 0.6; cursor: not-allowed; }
-
-          .login__switch { text-align: center; font-size: 0.85rem; color: #b3b3b3; margin-top: 1.1rem; }
-          .login__sign { color: #E50914; font-weight: bold; cursor: pointer; margin-left: 5px; }
-          .login__sign:hover { text-decoration: underline; }
-
+          .login__input { width: 100%; background: #222; border: 1px solid #333; padding: 0.85rem 1rem; border-radius: 0.5rem; color: #fff; font-weight: 600; font-size: 0.95rem; transition: 0.3s; }
+          .login__input::placeholder { color: #888; } .login__input:focus { border-color: #E50914; outline: none; background: #2a2a2a; }
+          .login__box i { position: absolute; right: 1rem; font-size: 1.2rem; color: #aaa; } .login__eye { cursor: pointer; z-index: 10; }
+          .login__forgot { display: block; text-align: right; font-size: 0.82rem; color: #b3b3b3; margin-bottom: 1.1rem; text-decoration: none; } .login__forgot:hover { color: #E50914; text-decoration: underline; }
+          .login__button { width: 100%; padding: 0.85rem; border-radius: 0.5rem; font-weight: 600; background-color: #E50914; color: #fff; cursor: pointer; transition: 0.3s; border: none; font-size: 1rem; }
+          .login__button:hover { background-color: #c90812; box-shadow: 0 4px 15px rgba(229,9,20,0.5); } .login__button:disabled { opacity: 0.6; cursor: not-allowed; }
+          .login__switch { text-align: center; font-size: 0.85rem; color: #b3b3b3; margin-top: 1.1rem; } .login__sign { color: #E50914; font-weight: bold; cursor: pointer; margin-left: 5px; } .login__sign:hover { text-decoration: underline; }
           @media screen and (min-width: 1024px) {
-            .login__container {
-              grid-template-columns: 520px 380px; column-gap: 3.5rem;
-              width: 1000px; max-width: 1050px; height: 640px;
-              padding: 1.5rem 3rem 1.5rem 1.5rem; border-radius: 2.5rem;
-            }
-            .login__swiper {
-              display: block; position: relative; height: 100%; border-radius: 2rem; overflow: hidden;
-              background-color: #111;
-              clip-path: path("M0 37.8182C0 16.9318 17.9784 0 40.156 0H481.843C504.902 0 523.224 18.2478 521.936 39.9306L486.273 580.294C485.083 600.328 467.487 616 446.18 616H40.156C17.9784 616 0 599.068 0 578.182V37.8182Z");
-            }
-            .login__swiper-img {
-              position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-              opacity: 0; z-index: 1; transition: opacity 1.2s ease-in-out;
-            }
-            .login__swiper-img.active { opacity: 1; z-index: 2; }
-            .slider-overlay {
-              position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-              background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%); z-index: 3;
-            }
-            .login__swiper-data { position: absolute; z-index: 10; color: #fff; left: 2.5rem; bottom: 3.5rem; }
-            .login__swiper-subtitle { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 2px; text-transform: uppercase; color: #E50914; }
-            .login__swiper-title { font-size: 1.6rem; font-family: "Unbounded", sans-serif; line-height: 1.3; text-shadow: 2px 2px 8px rgba(0,0,0,0.9); }
-            .swiper-pagination { position: absolute; bottom: 3.5rem; right: 3.5rem; z-index: 10; display: flex; gap: 8px; }
-            .swiper-pagination-bullet { width: 8px; height: 8px; background-color: rgba(255,255,255,0.4); border-radius: 50%; transition: 0.4s; }
-            .swiper-pagination-bullet.active { opacity: 1; transform: scale(1.3); background-color: #E50914; width: 20px; border-radius: 4px; }
+            .login__container { grid-template-columns: 520px 380px; column-gap: 3.5rem; width: 1000px; max-width: 1050px; height: 640px; padding: 1.5rem 3rem 1.5rem 1.5rem; border-radius: 2.5rem; }
+            .login__swiper { display: block; position: relative; height: 100%; border-radius: 2rem; overflow: hidden; background-color: #111; clip-path: path("M0 37.8182C0 16.9318 17.9784 0 40.156 0H481.843C504.902 0 523.224 18.2478 521.936 39.9306L486.273 580.294C485.083 600.328 467.487 616 446.18 616H40.156C17.9784 616 0 599.068 0 578.182V37.8182Z"); }
+            .login__swiper-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; z-index: 1; transition: opacity 1.2s ease-in-out; } .login__swiper-img.active { opacity: 1; z-index: 2; }
+            .slider-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%); z-index: 3; }
+            .login__swiper-data { position: absolute; z-index: 10; color: #fff; left: 2.5rem; bottom: 3.5rem; } .login__swiper-subtitle { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 2px; text-transform: uppercase; color: #E50914; } .login__swiper-title { font-size: 1.6rem; font-family: "Unbounded", sans-serif; line-height: 1.3; text-shadow: 2px 2px 8px rgba(0,0,0,0.9); }
+            .swiper-pagination { position: absolute; bottom: 3.5rem; right: 3.5rem; z-index: 10; display: flex; gap: 8px; } .swiper-pagination-bullet { width: 8px; height: 8px; background-color: rgba(255,255,255,0.4); border-radius: 50%; transition: 0.4s; } .swiper-pagination-bullet.active { opacity: 1; transform: scale(1.3); background-color: #E50914; width: 20px; border-radius: 4px; }
           }
         `}
       </style>
-
       <div className="login__container">
         <div className="login__swiper">
           <div className="slider-overlay"></div>
-          {sliderImages.map((src, index) => (
-            <img key={index} src={src} alt="Movie Backdrop" className={`login__swiper-img ${index === currentSlide ? 'active' : ''}`} />
-          ))}
+          {sliderImages.map((src, index) => <img key={index} src={src} alt="Backdrop" className={`login__swiper-img ${index === currentSlide ? 'active' : ''}`} />)}
           <div className="login__swiper-data">
-            <p className="login__swiper-subtitle">Now Streaming</p>
-            <h1 className="login__swiper-title">Unlimited Movies <br /> & TV Shows</h1>
-          </div>
-          <div className="swiper-pagination">
-            {sliderImages.map((_, index) => (
-              <div key={index} className={`swiper-pagination-bullet ${index === currentSlide ? 'active' : ''}`}></div>
-            ))}
+            <p className="login__swiper-subtitle">Now Streaming</p><h1 className="login__swiper-title">Unlimited Movies <br /> & TV Shows</h1>
           </div>
         </div>
-
         <div className="login__area">
           <div className="login__data">
             <h2 className="logo-title">CINEFLIX</h2>
             <h1 className="login__title">{isLogin ? 'Welcome Back 👋' : 'Create Account 🚀'}</h1>
             <p className="login__description">Please enter your details to sign in.</p>
-            
-            {/* Custom Google Login Button */}
             <button type="button" className="google-btn-custom" onClick={handleGoogleSignIn} disabled={loading}>
               <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style={{width: '20px'}}/>
               {loading ? 'Processing...' : 'Sign in with Google'}
             </button>
-
           </div>
-
           <span className="login__line">or</span>
-
           {errorMsg && <div className="error-alert">{errorMsg}</div>}
-
           <form className="login__form" onSubmit={handleAuthSubmit}>
             {!isLogin && (
               <div className="login__box">
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  className="login__input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required={!isLogin}
-                />
+                <input type="text" placeholder="Full Name" className="login__input" value={fullName} onChange={(e) => setFullName(e.target.value)} required={!isLogin} />
                 <i className="ri-user-line"></i>
               </div>
             )}
-
             <div className="login__box">
-              <input
-                type="email"
-                placeholder="Email Address"
-                className="login__input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <input type="email" placeholder="Email Address" className="login__input" value={email} onChange={(e) => setEmail(e.target.value)} required />
               <i className="ri-mail-line"></i>
             </div>
-
             <div className="login__box">
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder="Password"
-                className="login__input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <input type={showPass ? "text" : "password"} placeholder="Password" className="login__input" value={password} onChange={(e) => setPassword(e.target.value)} required />
               <i className={`ri-eye${showPass ? '-off' : ''}-line login__eye`} onClick={() => setShowPass(!showPass)}></i>
             </div>
-
             {isLogin && <a href="#" className="login__forgot">Forgot Password?</a>}
-
             <button type="submit" className="login__button" disabled={loading}>
               {loading ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
             </button>
           </form>
-
           <p className="login__switch">
             {isLogin ? "Don't have an account?" : "Already have an account?"}
-            <span className="login__sign" onClick={() => { setAppState(isLogin ? 'signup' : 'login'); setErrorMsg(''); }}>
-              {isLogin ? 'Sign Up' : 'Sign In'}
-            </span>
+            <span className="login__sign" onClick={() => { setAppState(isLogin ? 'signup' : 'login'); setErrorMsg(''); }}>{isLogin ? 'Sign Up' : 'Sign In'}</span>
           </p>
         </div>
       </div>
@@ -460,7 +314,6 @@ function MovieApp({ user, setAppState, setUser }) {
         if (originalsData.results && originalsData.results.length > 0) {
           const randomMovie = originalsData.results[Math.floor(Math.random() * originalsData.results.length)];
           setBannerMovie(randomMovie);
-
           if (randomMovie?.id) {
             const videoRes = await fetch(`${BASE_URL}/tv/${randomMovie.id}/videos?api_key=${API_KEY}`);
             const videoData = await videoRes.json();
@@ -506,7 +359,6 @@ function MovieApp({ user, setAppState, setUser }) {
     setSingleTrailerKey("");
     setSingleMovieDetails(null);
     setSimilarMovies([]);
-
     try {
       const [detailsRes, videoRes, similarRes] = await Promise.all([
         fetch(`${BASE_URL}/${type}/${movie.id}?api_key=${API_KEY}`),
@@ -516,10 +368,8 @@ function MovieApp({ user, setAppState, setUser }) {
       const detailsData = await detailsRes.json();
       const videoData = await videoRes.json();
       const similarData = await similarRes.json();
-
       setSingleMovieDetails(detailsData);
       setSimilarMovies((similarData.results || []).filter(item => item.poster_path));
-
       const trailer = videoData.results?.find(vid => vid.type === "Trailer") || videoData.results?.[0];
       if (trailer) setSingleTrailerKey(trailer.key);
     } catch (error) { }
@@ -529,10 +379,7 @@ function MovieApp({ user, setAppState, setUser }) {
     if (carouselRef.current) {
       const { scrollLeft, clientWidth } = carouselRef.current;
       const scrollAmount = clientWidth * 0.75;
-      carouselRef.current.scrollTo({
-        left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount,
-        behavior: 'smooth'
-      });
+      carouselRef.current.scrollTo({ left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount, behavior: 'smooth' });
     }
   };
 
@@ -550,317 +397,118 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
+  // 🔥 ACTION BUTTON CLICK HANDLERS (Plays Video + Opens Ads) 🔥
+  const handleWatchClick = (movie) => {
+    triggerPopUnderAds(); // Background tab 2ක් open වෙයි
+    setPlayingVideo({ id: movie.id, type: movie.media_type }); // Movie එක play වෙයි
+  };
+
+  const handleDownloadClick = (e, movie) => {
+    e.preventDefault();
+    triggerPopUnderAds(); 
+    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; // Current window එක download link එකට යයි
+  };
+
   return (
     <div className="app-container">
       <style>
         {`
-          .app-container {
-            width: 100vw; min-height: 100vh; position: relative;
-            background-color: #0b0b0b; color: #ffffff;
-            padding-bottom: 70px;
-          }
-
-          .mobile-header {
-            position: fixed; top: 0; left: 0; width: 100%; height: 60px;
-            background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 1.25rem; z-index: 100;
-          }
-          .mobile-logo {
-            font-family: 'Unbounded', sans-serif; font-size: 1.3rem; font-weight: 900;
-            color: #E50914; letter-spacing: 1px;
-          }
+          .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
+          .mobile-header { position: fixed; top: 0; left: 0; width: 100%; height: 60px; background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 1.25rem; z-index: 100; }
+          .mobile-logo { font-family: 'Unbounded', sans-serif; font-size: 1.3rem; font-weight: 900; color: #E50914; letter-spacing: 1px; }
           .sidebar { display: none; }
-          .bottom-nav {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 60px;
-            background-color: rgba(18, 18, 18, 0.95);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(255,255,255,0.08);
-            display: flex; justify-content: space-around; align-items: center;
-            z-index: 200;
-          }
-          .nav-item {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #888; font-size: 0.7rem; font-weight: 600; cursor: pointer;
-            gap: 3px; transition: 0.2s;
-          }
-          .nav-item.active { color: #E50914; }
-          .nav-icon { width: 22px; height: 22px; fill: currentColor; }
-
-          .main-content { width: 100%; position: relative; min-height: 100vh; }
-          .page-content { padding: 70px 1rem 2rem 1rem; }
-
-          .banner {
-            width: 100%; height: 70vh; position: relative;
-            display: flex; align-items: flex-end; overflow: hidden;
-          }
-          .banner-bg-wrapper {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%;
-            z-index: 1; background-color: #000;
-          }
+          .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; background-color: rgba(18, 18, 18, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-around; align-items: center; z-index: 200; }
+          .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 0.7rem; font-weight: 600; cursor: pointer; gap: 3px; transition: 0.2s; }
+          .nav-item.active { color: #E50914; } .nav-icon { width: 22px; height: 22px; fill: currentColor; }
+          .main-content { width: 100%; position: relative; min-height: 100vh; } .page-content { padding: 70px 1rem 2rem 1rem; }
+          .banner { width: 100%; height: 70vh; position: relative; display: flex; align-items: flex-end; overflow: hidden; }
+          .banner-bg-wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 1; background-color: #000; }
           .banner-image { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
-          .banner-video {
-            width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh;
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            pointer-events: none;
-          }
-          .banner-fadeLeft {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(90deg, rgba(11,11,11,0.9) 0%, rgba(11,11,11,0.2) 60%, transparent 100%);
-            z-index: 2;
-          }
-          .banner-fadeBottom {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 60%;
-            background: linear-gradient(180deg, transparent 0%, rgba(11,11,11,0.85) 60%, #0b0b0b 100%);
-            z-index: 2;
-          }
+          .banner-video { width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+          .banner-fadeLeft { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(11,11,11,0.9) 0%, rgba(11,11,11,0.2) 60%, transparent 100%); z-index: 2; }
+          .banner-fadeBottom { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(180deg, transparent 0%, rgba(11,11,11,0.85) 60%, #0b0b0b 100%); z-index: 2; }
           .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; }
           .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
-          .banner-title {
-            font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin-bottom: 8px;
-            text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8);
-          }
-          .banner-description {
-            font-size: 0.88rem; line-height: 1.4; margin-bottom: 16px; color: #d0d0d0;
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-          }
+          .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin-bottom: 8px; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
+          .banner-description { font-size: 0.88rem; line-height: 1.4; margin-bottom: 16px; color: #d0d0d0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
           .banner-buttons { display: flex; gap: 12px; }
-          .banner-button {
-            cursor: pointer; font-weight: bold; font-size: 0.95rem; border-radius: 6px;
-            padding: 8px 22px; border: none; display: flex; align-items: center; gap: 8px; transition: 0.2s;
-          }
-          .play-btn { background-color: #E50914; color: #ffffff; }
-          .play-btn:hover { background-color: #c90812; transform: scale(1.03); }
-
+          .banner-button { cursor: pointer; font-weight: bold; font-size: 0.95rem; border-radius: 6px; padding: 8px 22px; border: none; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+          .play-btn { background-color: #E50914; color: #ffffff; } .play-btn:hover { background-color: #c90812; transform: scale(1.03); }
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
-          .row { margin-bottom: 30px; }
-          .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
-          .row-posters {
-            display: flex; overflow-y: visible; overflow-x: auto; gap: 18px;
-            scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch;
-          }
-          .row-posters::-webkit-scrollbar { display: none; }
-          .row-poster {
-            width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px);
-            object-fit: cover; border-radius: 10px;
-            cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6);
-            transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease;
-          }
-          .row-poster:hover {
-            transform: scale(1.25);
-            z-index: 30;
-            box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5);
-          }
-
-          /* SINGLE MOVIE VIEW */
-          .showcase-view {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: #0b0b0b; z-index: 500; overflow-y: auto; overflow-x: hidden;
-            display: flex; flex-direction: column; justify-content: space-between;
-            animation: fadeIn 0.4s ease-out;
-          }
-
-          .showcase-bg-wrapper {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
-          }
-          .showcase-bg-video {
-            width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh;
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            pointer-events: none; opacity: 0.85;
-          }
+          .row { margin-bottom: 30px; } .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
+          .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
+          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
+          .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
+          .showcase-view { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #0b0b0b; z-index: 500; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; justify-content: space-between; animation: fadeIn 0.4s ease-out; }
+          .showcase-bg-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+          .showcase-bg-video { width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0.85; }
           .showcase-bg-img { width: 100%; height: 100%; object-fit: cover; opacity: 0.75; }
-          .showcase-gradient-left {
-            position: absolute; top: 0; left: 0; width: 65%; height: 100%;
-            background: linear-gradient(90deg, #0b0b0be6 0%, #0b0b0bcc 50%, transparent 100%);
-            z-index: 2;
-          }
-          .showcase-gradient-bottom {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 75%;
-            background: linear-gradient(180deg, transparent 0%, #0b0b0bcc 40%, #0b0b0b 100%);
-            z-index: 2;
-          }
-
-          .showcase-topbar {
-            position: relative; z-index: 10; display: flex; justify-content: space-between;
-            align-items: center; padding: 1.5rem 2.5rem; width: 100%;
-          }
-          .showcase-logo {
-            font-family: 'Unbounded', sans-serif; font-size: 1.5rem; font-weight: 900;
-            color: #E50914; letter-spacing: 2px;
-          }
-          .showcase-close-btn {
-            background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);
-            transition: 0.2s;
-          }
+          .showcase-gradient-left { position: absolute; top: 0; left: 0; width: 65%; height: 100%; background: linear-gradient(90deg, #0b0b0be6 0%, #0b0b0bcc 50%, transparent 100%); z-index: 2; }
+          .showcase-gradient-bottom { position: absolute; bottom: 0; left: 0; width: 100%; height: 75%; background: linear-gradient(180deg, transparent 0%, #0b0b0bcc 40%, #0b0b0b 100%); z-index: 2; }
+          .showcase-topbar { position: relative; z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2.5rem; width: 100%; }
+          .showcase-logo { font-family: 'Unbounded', sans-serif; font-size: 1.5rem; font-weight: 900; color: #E50914; letter-spacing: 2px; }
+          .showcase-close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: 0.2s; }
           .showcase-close-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
-
-          .showcase-body {
-            position: relative; z-index: 10; padding: 1rem 2.5rem;
-            display: flex; flex-direction: column; justify-content: center;
-            max-width: 650px;
-          }
-          .showcase-huge-title {
-            font-family: 'Bebas Neue', 'Unbounded', sans-serif;
-            font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95;
-            letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0;
-            text-shadow: 0 4px 20px rgba(0,0,0,0.9);
-          }
-          .showcase-tagline {
-            font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px;
-            color: #ffffff; text-transform: uppercase; margin-bottom: 12px;
-          }
-          .showcase-metadata {
-            display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
-            font-size: 0.88rem; color: #cfcfcf; margin-bottom: 15px; font-weight: 600;
-          }
+          .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; max-width: 650px; }
+          .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
+          .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin-bottom: 12px; }
+          .showcase-metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 0.88rem; color: #cfcfcf; margin-bottom: 15px; font-weight: 600; }
           .stars-rating { color: #E50914; font-size: 1rem; letter-spacing: 2px; }
-          .showcase-overview {
-            font-size: 0.95rem; line-height: 1.6; color: #b8b8b8; margin-bottom: 25px;
-            display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
-          }
-
+          .showcase-overview { font-size: 0.95rem; line-height: 1.6; color: #b8b8b8; margin-bottom: 25px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
           .showcase-buttons { display: flex; gap: 14px; margin-bottom: 1.5rem; }
-          .btn-red-play {
-            background-color: #E50914; color: #ffffff; padding: 12px 32px;
-            font-size: 1rem; font-weight: 700; border-radius: 6px; border: none;
-            cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s;
-          }
+          .btn-red-play { background-color: #E50914; color: #ffffff; padding: 12px 32px; font-size: 1rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; }
           .btn-red-play:hover { background-color: #f40612; transform: scale(1.04); }
-          .btn-gray-download {
-            background-color: rgba(255,255,255,0.18); color: #ffffff; padding: 12px 28px;
-            font-size: 1rem; font-weight: 700; border-radius: 6px; border: none;
-            cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s;
-            text-decoration: none; backdrop-filter: blur(8px);
-          }
+          .btn-gray-download { background-color: rgba(255,255,255,0.18); color: #ffffff; padding: 12px 28px; font-size: 1rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; text-decoration: none; backdrop-filter: blur(8px); }
           .btn-gray-download:hover { background-color: rgba(255,255,255,0.28); transform: scale(1.04); }
-
-          .showcase-bottom-carousel {
-            position: relative; z-index: 10; padding: 1rem 2.5rem 2rem 2.5rem; width: 100%;
-          }
-          .showcase-carousel-header {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
-          }
+          .showcase-bottom-carousel { position: relative; z-index: 10; padding: 1rem 2.5rem 2rem 2.5rem; width: 100%; }
+          .showcase-carousel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
           .showcase-carousel-title { font-size: 1.1rem; font-weight: 700; color: #eaeaea; }
           .carousel-arrows { display: flex; gap: 10px; }
-          .arrow-btn {
-            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
-            color: white; width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; transition: 0.2s;
-          }
+          .arrow-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); color: white; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .arrow-btn:hover { background: #E50914; border-color: #E50914; }
-
-          .showcase-cards-scroll {
-            display: flex; gap: 16px; overflow-x: auto; overflow-y: visible;
-            scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch;
-          }
-          .showcase-cards-scroll::-webkit-scrollbar { display: none; }
-          .showcase-card {
-            width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px);
-            border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer;
-            border: 2px solid rgba(255,255,255,0.12);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.8);
-            transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease;
-          }
-          .showcase-card:hover {
-            transform: scale(1.25); z-index: 40; border-color: #E50914;
-            box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6);
-          }
-
-          .fullscreen-player {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: #000; z-index: 9999; display: flex; flex-direction: column;
-          }
-          .player-header {
-            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
-            background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; z-index: 10000;
-          }
+          .showcase-cards-scroll { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch; } .showcase-cards-scroll::-webkit-scrollbar { display: none; }
+          .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
+          .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
+          .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; flex-direction: column; }
+          .player-header { position: absolute; top: 0; left: 0; width: 100%; height: 60px; background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10000; }
           .server-selector { display: flex; gap: 8px; align-items: center; }
-          .server-btn {
-            background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);
-            padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
-            transition: 0.2s;
-          }
+          .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
           .server-btn.active { background: #E50914; border-color: #E50914; }
-          .close-player-btn {
-            background: rgba(0,0,0,0.7); color: white; border: 2px solid white; border-radius: 50%;
-            width: 38px; height: 38px; font-size: 18px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-          }
+          .close-player-btn { background: rgba(0,0,0,0.7); color: white; border: 2px solid white; border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
           .close-player-btn:hover { background: #E50914; border-color: #E50914; }
           .player-iframe { width: 100%; height: 100%; border: none; }
-
           @media screen and (min-width: 900px) {
-            .app-container { padding-bottom: 0; }
-            .mobile-header, .bottom-nav { display: none; }
-            .sidebar {
-              display: flex; position: fixed; top: 0; left: 0; width: 80px; height: 100vh;
-              background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%);
-              flex-direction: column; align-items: center; padding-top: 30px; gap: 40px; z-index: 200;
-            }
-            .sidebar .nav-icon { width: 26px; height: 26px; fill: #b3b3b3; cursor: pointer; }
-            .sidebar .nav-icon:hover { fill: white; transform: scale(1.1); }
-            .sidebar .nav-icon.active { fill: white; border-bottom: 2px solid #E50914; padding-bottom: 5px; }
-            .main-content { padding-left: 80px; }
-            .page-content { padding: 40px 40px 40px 10px; }
-            .banner { height: 85vh; align-items: center; }
-            .banner-fadeLeft { width: 45%; }
-            .banner-fadeBottom { height: 35%; }
-            .banner-contents { margin-left: 20px; padding: 0; }
-            .banner-description { -webkit-line-clamp: 3; font-size: 1.05rem; }
-            .banner-button { font-size: 1.05rem; padding: 10px 28px; }
-            .rows-container { margin-top: -80px; padding-left: 20px; }
+            .app-container { padding-bottom: 0; } .mobile-header, .bottom-nav { display: none; }
+            .sidebar { display: flex; position: fixed; top: 0; left: 0; width: 80px; height: 100vh; background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%); flex-direction: column; align-items: center; padding-top: 30px; gap: 40px; z-index: 200; }
+            .sidebar .nav-icon { width: 26px; height: 26px; fill: #b3b3b3; cursor: pointer; } .sidebar .nav-icon:hover { fill: white; transform: scale(1.1); } .sidebar .nav-icon.active { fill: white; border-bottom: 2px solid #E50914; padding-bottom: 5px; }
+            .main-content { padding-left: 80px; } .page-content { padding: 40px 40px 40px 10px; }
+            .banner { height: 85vh; align-items: center; } .banner-fadeLeft { width: 45%; } .banner-fadeBottom { height: 35%; } .banner-contents { margin-left: 20px; padding: 0; } .banner-description { -webkit-line-clamp: 3; font-size: 1.05rem; } .banner-button { font-size: 1.05rem; padding: 10px 28px; } .rows-container { margin-top: -80px; padding-left: 20px; }
           }
         `}
       </style>
 
-      {/* Mobile Top Header */}
       <header className="mobile-header">
         <span className="mobile-logo">CINEFLIX</span>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <svg onClick={() => setActiveTab('search')} style={{ width: '22px', height: '22px', fill: '#fff', cursor: 'pointer' }} viewBox="0 0 24 24">
-            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
-          </svg>
-          <svg onClick={handleLogout} style={{ width: '22px', height: '22px', fill: '#E50914', cursor: 'pointer' }} viewBox="0 0 24 24">
-            <path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" />
-          </svg>
+          <svg onClick={() => setActiveTab('search')} style={{ width: '22px', height: '22px', fill: '#fff', cursor: 'pointer' }} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
+          <svg onClick={handleLogout} style={{ width: '22px', height: '22px', fill: '#E50914', cursor: 'pointer' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" /></svg>
         </div>
       </header>
 
-      {/* Desktop Sidebar */}
       <nav className="sidebar">
-        <svg onClick={() => setActiveTab('search')} className={`nav-icon ${activeTab === 'search' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 14z" /></svg>
+        <svg onClick={() => setActiveTab('search')} className={`nav-icon ${activeTab === 'search' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
         <svg onClick={() => setActiveTab('home')} className={`nav-icon ${activeTab === 'home' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
         <svg onClick={() => setActiveTab('tv')} className={`nav-icon ${activeTab === 'tv' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg>
         <svg onClick={() => setActiveTab('movies')} className={`nav-icon ${activeTab === 'movies' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg>
         <svg onClick={() => setActiveTab('trending')} className={`nav-icon ${activeTab === 'trending' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" /></svg>
-
-        <div style={{ marginTop: 'auto', marginBottom: '20px' }}>
-          <svg onClick={handleLogout} className="nav-icon" title="Logout" style={{ fill: '#E50914' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" /></svg>
-        </div>
+        <div style={{ marginTop: 'auto', marginBottom: '20px' }}><svg onClick={handleLogout} className="nav-icon" title="Logout" style={{ fill: '#E50914' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" /></svg></div>
       </nav>
 
-      {/* Mobile Bottom Nav */}
       <div className="bottom-nav">
-        <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
-          <span>Home</span>
-        </div>
-        <div className={`nav-item ${activeTab === 'tv' ? 'active' : ''}`} onClick={() => setActiveTab('tv')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg>
-          <span>TV Shows</span>
-        </div>
-        <div className={`nav-item ${activeTab === 'movies' ? 'active' : ''}`} onClick={() => setActiveTab('movies')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg>
-          <span>Movies</span>
-        </div>
-        <div className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`} onClick={() => setActiveTab('trending')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" /></svg>
-          <span>Trending</span>
-        </div>
+        <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}><svg className="nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg><span>Home</span></div>
+        <div className={`nav-item ${activeTab === 'tv' ? 'active' : ''}`} onClick={() => setActiveTab('tv')}><svg className="nav-icon" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg><span>TV Shows</span></div>
+        <div className={`nav-item ${activeTab === 'movies' ? 'active' : ''}`} onClick={() => setActiveTab('movies')}><svg className="nav-icon" viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg><span>Movies</span></div>
+        <div className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`} onClick={() => setActiveTab('trending')}><svg className="nav-icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" /></svg><span>Trending</span></div>
       </div>
 
       <main className="main-content">
@@ -868,11 +516,7 @@ function MovieApp({ user, setAppState, setUser }) {
           <>
             <header className="banner">
               <div className="banner-bg-wrapper">
-                {trailerKey ? (
-                  <iframe className="banner-video" src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&loop=1&playlist=${trailerKey}`} frameBorder="0" allow="autoplay" />
-                ) : (
-                  <img className="banner-image" src={`${IMAGE_BASE_URL}${bannerMovie?.backdrop_path}`} alt="Banner" />
-                )}
+                {trailerKey ? <iframe className="banner-video" src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&loop=1&playlist=${trailerKey}`} frameBorder="0" allow="autoplay" /> : <img className="banner-image" src={`${IMAGE_BASE_URL}${bannerMovie?.backdrop_path}`} alt="Banner" />}
               </div>
               <div className="banner-fadeLeft" />
               <div className="banner-fadeBottom" />
@@ -881,63 +525,27 @@ function MovieApp({ user, setAppState, setUser }) {
                 <h1 className="banner-title">{bannerMovie?.title || bannerMovie?.name || "MONEY HEIST"}</h1>
                 <p className="banner-description">{bannerMovie?.overview}</p>
                 <div className="banner-buttons">
-                  <button className="banner-button play-btn" onClick={() => openSingleMovie(bannerMovie)}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> View Info
-                  </button>
+                  <button className="banner-button play-btn" onClick={() => openSingleMovie(bannerMovie)}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> View Info</button>
                 </div>
               </div>
             </header>
-
             <div className="rows-container">
-              <div className="row">
-                <h2>New this week</h2>
-                <div className="row-posters">
-                  {trending.map(movie => movie.poster_path && (
-                    <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />
-                  ))}
-                </div>
-              </div>
-              <div className="row">
-                <h2>Netflix Originals</h2>
-                <div className="row-posters">
-                  {netflixOriginals.map(movie => movie.poster_path && (
-                    <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />
-                  ))}
-                </div>
-              </div>
-              <div className="row">
-                <h2>Top Rated</h2>
-                <div className="row-posters">
-                  {topRated.map(movie => movie.poster_path && (
-                    <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.title} />
-                  ))}
-                </div>
-              </div>
+              <div className="row"><h2>New this week</h2><div className="row-posters">{trending.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
+              <div className="row"><h2>Netflix Originals</h2><div className="row-posters">{netflixOriginals.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
+              <div className="row"><h2>Top Rated</h2><div className="row-posters">{topRated.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.title} />)}</div></div>
             </div>
           </>
         )}
-
         {activeTab === 'search' && (
           <div className="page-content">
-            <div className="search-header">
-              <input type="text" className="search-input" placeholder="Search movies, series..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus />
-            </div>
-            <div className="movies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
-              {searchResults.map(movie => movie.poster_path && (
-                <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
-              ))}
-            </div>
+            <div className="search-header"><input type="text" className="search-input" placeholder="Search movies, series..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus /></div>
+            <div className="movies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{searchResults.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
           </div>
         )}
-
         {['tv', 'movies', 'trending'].includes(activeTab) && (
           <div className="page-content">
             <h1 style={{ fontSize: '1.6rem', marginBottom: '20px', fontWeight: 'bold' }}>{activeTab === 'tv' ? 'TV Shows' : activeTab === 'movies' ? 'Movies' : 'Trending Now'}</h1>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
-              {gridData.map(movie => movie.poster_path && (
-                <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
-              ))}
-            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{gridData.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
           </div>
         )}
       </main>
@@ -945,55 +553,33 @@ function MovieApp({ user, setAppState, setUser }) {
       {selectedMovie && (
         <div className="showcase-view">
           <div className="showcase-bg-wrapper">
-            {singleTrailerKey ? (
-              <iframe className="showcase-bg-video" src={`https://www.youtube.com/embed/${singleTrailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&loop=1&playlist=${singleTrailerKey}`} frameBorder="0" allow="autoplay" />
-            ) : (
-              <img className="showcase-bg-img" src={`${IMAGE_BASE_URL}${selectedMovie.backdrop_path || selectedMovie.poster_path}`} alt="Backdrop" />
-            )}
+            {singleTrailerKey ? <iframe className="showcase-bg-video" src={`https://www.youtube.com/embed/${singleTrailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&loop=1&playlist=${singleTrailerKey}`} frameBorder="0" allow="autoplay" /> : <img className="showcase-bg-img" src={`${IMAGE_BASE_URL}${selectedMovie.backdrop_path || selectedMovie.poster_path}`} alt="Backdrop" />}
             <div className="showcase-gradient-left" />
             <div className="showcase-gradient-bottom" />
           </div>
-
           <div className="showcase-topbar">
             <span className="showcase-logo">CINEFLIX</span>
             <button className="showcase-close-btn" onClick={() => setSelectedMovie(null)}>✕</button>
           </div>
-
           <div className="showcase-body">
             <h1 className="showcase-huge-title">{selectedMovie.title || selectedMovie.name}</h1>
-
-            {singleMovieDetails?.tagline && (
-              <div className="showcase-tagline">{singleMovieDetails.tagline}</div>
-            )}
-
+            {singleMovieDetails?.tagline && <div className="showcase-tagline">{singleMovieDetails.tagline}</div>}
             <div className="showcase-metadata">
               <span className="stars-rating">★★★★★</span>
               <span>{selectedMovie.release_date ? selectedMovie.release_date.split('-')[0] : (selectedMovie.first_air_date ? selectedMovie.first_air_date.split('-')[0] : '2024')}</span>
               <span>{singleMovieDetails?.genres?.map(g => g.name).slice(0, 3).join(', ') || 'Action, Drama'}</span>
               <span>{singleMovieDetails?.runtime ? `${Math.floor(singleMovieDetails.runtime / 60)}h ${singleMovieDetails.runtime % 60}min` : '2h 15min'}</span>
             </div>
-
             <p className="showcase-overview">{selectedMovie.overview}</p>
-
             <div className="showcase-buttons">
-              <button
-                className="btn-red-play"
-                onClick={() => setPlayingVideo({ id: selectedMovie.id, type: selectedMovie.media_type })}
-              >
+              <button className="btn-red-play" onClick={() => handleWatchClick(selectedMovie)}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> Play
               </button>
-
-              <a
-                href={`https://dl.vidsrc.vip/movie/${selectedMovie.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-gray-download"
-              >
+              <a href="#" className="btn-gray-download" onClick={(e) => handleDownloadClick(e, selectedMovie)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg> Download
               </a>
             </div>
           </div>
-
           <div className="showcase-bottom-carousel">
             <div className="showcase-carousel-header">
               <span className="showcase-carousel-title">More Like This</span>
@@ -1002,17 +588,8 @@ function MovieApp({ user, setAppState, setUser }) {
                 <button className="arrow-btn" onClick={() => scrollCarousel('right')}>›</button>
               </div>
             </div>
-
             <div className="showcase-cards-scroll" ref={carouselRef}>
-              {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && (
-                <img
-                  key={m.id}
-                  src={`${IMAGE_BASE_URL}${m.poster_path}`}
-                  alt={m.title || m.name}
-                  className="showcase-card"
-                  onClick={() => openSingleMovie(m)}
-                />
-              ))}
+              {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && <img key={m.id} src={`${IMAGE_BASE_URL}${m.poster_path}`} alt={m.title || m.name} className="showcase-card" onClick={() => openSingleMovie(m)} />)}
             </div>
           </div>
         </div>
@@ -1029,13 +606,7 @@ function MovieApp({ user, setAppState, setUser }) {
             </div>
             <button className="close-player-btn" onClick={() => setPlayingVideo(null)}>✕</button>
           </div>
-
-          <iframe
-            className="player-iframe"
-            src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)}
-            allowFullScreen
-            frameBorder="0"
-          />
+          <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
         </div>
       )}
     </div>
