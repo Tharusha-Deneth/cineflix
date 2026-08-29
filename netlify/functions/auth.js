@@ -26,13 +26,19 @@ exports.handler = async (event) => {
 
   const { action, full_name, email, password, google_id } = data;
 
+  // Real Email validation check
+  if (email && !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+    return { statusCode: 400, headers, body: JSON.stringify({ status: 'error', message: 'Please enter a valid email address' }) };
+  }
+
   try {
+    // Workbench එකේ පෙන්වන 'netflix_clone' database එකටම සම්බන්ධ කිරීම
     const connection = await mysql.createConnection({
       host: 'mysql-f149e35-cineflix.l.aivencloud.com',
       port: 18408,
       user: 'avnadmin',
       password: 'AVNS_kHcyMX3jHgBvSRy4oDh',
-      database: 'defaultdb',
+      database: 'netflix_clone', // මෙතැන netflix_clone ලෙස නිවැරදි කර ඇත
       ssl: { rejectUnauthorized: false }
     });
 
@@ -75,7 +81,7 @@ exports.handler = async (event) => {
       const [users] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
       if (users.length === 0) {
         await connection.end();
-        return { statusCode: 400, headers, body: JSON.stringify({ status: 'error', message: 'Email not found' }) };
+        return { statusCode: 400, headers, body: JSON.stringify({ status: 'error', message: 'Email not found. Please Sign Up first.' }) };
       }
 
       const user = users[0];
