@@ -151,21 +151,15 @@ function AuthScreen({ appState, setAppState, setUser }) {
     const payload = isLogin ? { action, email, password } : { action, full_name: fullName, email, password };
 
     try {
-      const controller = new AbortController();
-      // Timeout එක වැඩි කළා Database එකට connect වෙන්න වෙලාව දෙන්න
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
+      // කිසිම Timeout එකක් නැතුව කෙලින්ම request එක යවමු
       const response = await fetch(BACKEND_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+        body: JSON.stringify(payload)
       });
-      clearTimeout(timeoutId);
 
-      // 502 හෝ 500 error එකක් ආවොත් අල්ලගන්න
       if (!response.ok) {
-        throw new Error("Server Error: " + response.status);
+        throw new Error("Server Error");
       }
 
       const result = await response.json();
@@ -176,7 +170,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
         setErrorMsg(result.message || 'Authentication failed');
       }
     } catch (err) {
-      setErrorMsg("Connection Timeout. DB is waking up, try again in 5s.");
+      setErrorMsg("Network error. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -188,38 +182,24 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const decoded = jwtDecode(credentialResponse.credential);
       const { name, email, sub } = decoded;
 
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const response = await fetch(BACKEND_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'google_auth',
-            full_name: name,
-            email: email,
-            google_id: sub
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        const result = await response.json();
-
-        if (result.status === 'success') {
-          saveSessionAndNavigate(result.user);
-          return;
-        }
-      } catch (backendErr) {
-        console.warn("Direct DB sync delayed. Logging in via verified Google token.");
-      }
-
-      // Safe Login via verified Google Token
-      saveSessionAndNavigate({
-        id: sub || Date.now(),
-        name: name,
-        email: email
+      const response = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'google_auth',
+          full_name: name,
+          email: email,
+          google_id: sub
+        })
       });
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        saveSessionAndNavigate(result.user);
+      } else {
+        setErrorMsg(result.message);
+      }
     } catch (err) {
       setErrorMsg("Google Authentication processing error.");
     } finally {

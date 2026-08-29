@@ -1,6 +1,19 @@
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 
+// Serverless පරිසරයට ගැළපෙන පරිදි Connection Pool එකක් සෑදීම (වේගය වැඩි කරයි)
+const pool = mysql.createPool({
+  host: 'mysql-f149e35-cineflix.l.aivencloud.com',
+  port: 18408,
+  user: 'avnadmin',
+  password: 'AVNS_kHcyMX3jHgBvSRy4oDh',
+  database: 'defaultdb',
+  ssl: { rejectUnauthorized: false },
+  waitForConnections: true,
+  connectionLimit: 1,
+  queueLimit: 0
+});
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -30,21 +43,9 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Please enter a valid real email address' }) };
   }
 
-  let connection; // Connection එක එළියෙන් හදමු
-
   try {
-    // 8-second Timeout එකක් දාලා Connect කරමු (502 Error එක නවත්වන්න)
-    connection = await mysql.createConnection({
-      host: 'mysql-f149e35-cineflix.l.aivencloud.com',
-      port: 18408,
-      user: 'avnadmin',
-      password: 'AVNS_kHcyMX3jHgBvSRy4oDh',
-      database: 'defaultdb',
-      ssl: { rejectUnauthorized: false },
-      connectTimeout: 8000 
-    });
-
-    await connection.execute(`
+    // මේකෙන් Table එක නැත්නම් විතරක් හදනවා, ඒ නිසා වේගවත්
+    await pool.execute(`
       CREATE TABLE IF NOT EXISTS users (
           id INT AUTO_INCREMENT PRIMARY KEY,
           full_name VARCHAR(100) NOT NULL,
@@ -59,18 +60,24 @@ exports.handler = async (event) => {
       if (!full_name || !email || !password) {
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'All fields are required' }) };
       }
-      const [existing] = await connection.execute('SELECT id FROM users WHERE email = ?', [email]);
+
+      const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
       if (existing.length > 0) {
-        return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Email already registered. Please Log In.' }) };
+        return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'This email is already registered. Please Log In.' }) };
       }
+
       const hashedPassword = await bcrypt.hash(password, 10);
-      const [result] = await connection.execute(
+      const [result] = await pool.execute(
         'INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)',
         [full_name, email, hashedPassword]
       );
+
       return {
-        statusCode: 200, headers, body: JSON.stringify({
-          status: 'success', message: 'Registration successful',
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'success',
+          message: 'Registration successful',
           user: { id: result.insertId, name: full_name, email }
         })
       };
@@ -80,42 +87,58 @@ exports.handler = async (event) => {
       if (!email || !password) {
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'All fields are required' }) };
       }
-      const [users] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
+
+      const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
       if (users.length === 0) {
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Email not found. Please Sign Up first.' }) };
       }
+
       const user = users[0];
       const isMatch = await bcrypt.compare(password, user.password);
+
       if (!isMatch) {
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Incorrect password!' }) };
       }
+
       return {
-        statusCode: 200, headers, body: JSON.stringify({
-          status: 'success', message: 'Login successful',
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'success',
+          message: 'Login successful',
           user: { id: user.id, name: user.full_name, email: user.email }
         })
       };
     }
 
     if (action === 'google_auth') {
-      const [users] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
+      const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+
       if (users.length > 0) {
         const user = users[0];
         return {
-          statusCode: 200, headers, body: JSON.stringify({
-            status: 'success', message: 'Google login successful',
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            status: 'success',
+            message: 'Google login successful',
             user: { id: user.id, name: user.full_name, email: user.email }
           })
         };
       }
+
       const randomPassword = await bcrypt.hash(Math.random().toString(36), 10);
-      const [result] = await connection.execute(
+      const [result] = await pool.execute(
         'INSERT INTO users (full_name, email, password, google_id) VALUES (?, ?, ?, ?)',
         [full_name || 'Google User', email, randomPassword, google_id || 'google_oauth']
       );
+
       return {
-        statusCode: 200, headers, body: JSON.stringify({
-          status: 'success', message: 'Google registration successful',
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'success',
+          message: 'Google registration successful',
           user: { id: result.insertId, name: full_name || 'Google User', email }
         })
       };
@@ -123,16 +146,10 @@ exports.handler = async (event) => {
 
     return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Invalid action' }) };
   } catch (error) {
-    // 502 Error එක වෙනුවට නිවැරදි JSON Error එකක් යැවීම
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ status: 'error', message: "Database timeout. Please try again." })
+      body: JSON.stringify({ status: 'error', message: "DB Error: " + (error.message || String(error)) })
     };
-  } finally {
-    // අනිවාර්යයෙන්ම Connection එක Close කිරීම (Crash වීම වළක්වයි)
-    if (connection) {
-      try { await connection.end(); } catch (err) {}
-    }
   }
 };
