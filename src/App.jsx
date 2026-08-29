@@ -17,7 +17,7 @@ const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
 // 🔥 ADSTERRA DIRECT LINK 🔥
-const ADSTERRA_DIRECT_LINK = "https://www.profitableratecpmnetwork.com/prw0pm5gz?key=1c776249816d480c305463fd75cb4f5f"; 
+const ADSTERRA_DIRECT_LINK = "https://www.profitableratecpmnetwork.com/prw0pm5gz?key=1c776249816d480c305463fd75cb4f5f";
 
 const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
@@ -27,17 +27,17 @@ const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 const triggerPopUnderAds = () => {
   const windowName1 = 'adWindow' + Math.random();
   const windowName2 = 'adWindow' + Math.random();
-  
+
   const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
   const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
 
   if (pop1) pop1.blur();
   if (pop2) pop2.blur();
-  window.focus(); 
+  window.focus();
 };
 
 export default function App() {
-  const [appState, setAppState] = useState('splash'); 
+  const [appState, setAppState] = useState('splash');
   const [user, setUser] = useState(null);
   const [hasAdBlock, setHasAdBlock] = useState(false);
 
@@ -67,7 +67,7 @@ export default function App() {
   useEffect(() => {
     const savedUser = localStorage.getItem('cineflix_current_user');
     const loginTime = localStorage.getItem('cineflix_login_time');
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000; 
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
     let nextState = 'login';
     if (savedUser && loginTime) {
@@ -91,21 +91,21 @@ export default function App() {
   if (hasAdBlock) {
     return (
       <div style={{
-        width: '100vw', height: '100vh', backgroundColor: '#0b0b0b', display: 'flex', 
+        width: '100vw', height: '100vh', backgroundColor: '#0b0b0b', display: 'flex',
         justifyContent: 'center', alignItems: 'center', padding: '20px', textAlign: 'center', zIndex: 999999
       }}>
         <div style={{
-          backgroundColor: '#181818', padding: '40px', borderRadius: '20px', 
+          backgroundColor: '#181818', padding: '40px', borderRadius: '20px',
           boxShadow: '0 15px 50px rgba(229,9,20,0.3)', maxWidth: '500px'
         }}>
-          <svg style={{width: '80px', fill: '#E50914', marginBottom: '20px'}} viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          <svg style={{ width: '80px', fill: '#E50914', marginBottom: '20px' }} viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
           </svg>
-          <h1 style={{color: '#fff', fontSize: '2rem', fontFamily: "'Unbounded', sans-serif", marginBottom: '15px'}}>AdBlock Detected!</h1>
-          <p style={{color: '#b3b3b3', fontSize: '1rem', lineHeight: '1.6', marginBottom: '30px', fontFamily: "'Montserrat', sans-serif"}}>
+          <h1 style={{ color: '#fff', fontSize: '2rem', fontFamily: "'Unbounded', sans-serif", marginBottom: '15px' }}>AdBlock Detected!</h1>
+          <p style={{ color: '#b3b3b3', fontSize: '1rem', lineHeight: '1.6', marginBottom: '30px', fontFamily: "'Montserrat', sans-serif" }}>
             We use ads to keep Cineflix free for everyone. Please <b>disable your AdBlocker</b> or whitelist our site to continue watching unlimited movies and TV shows.
           </p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             style={{
               backgroundColor: '#E50914', color: '#fff', padding: '15px 30px', borderRadius: '8px',
@@ -179,9 +179,9 @@ function AuthScreen({ appState, setAppState, setUser }) {
   const [loading, setLoading] = useState(false);
 
   const sliderImages = [
-    "https://image.tmdb.org/t/p/original/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg", 
-    "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg", 
-    "https://image.tmdb.org/t/p/original/gKkl37BQuKTanygYQG1pyYgLVgf.jpg"  
+    "https://image.tmdb.org/t/p/original/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg",
+    "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
+    "https://image.tmdb.org/t/p/original/gKkl37BQuKTanygYQG1pyYgLVgf.jpg"
   ];
 
   useEffect(() => {
@@ -284,7 +284,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
             <h1 className="login__title">{isLogin ? 'Welcome Back 👋' : 'Create Account 🚀'}</h1>
             <p className="login__description">Please enter your details to sign in.</p>
             <button type="button" className="google-btn-custom" onClick={handleGoogleSignIn} disabled={loading}>
-              <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style={{width: '20px'}}/>
+              <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style={{ width: '20px' }} />
               {loading ? 'Processing...' : 'Sign in with Google'}
             </button>
           </div>
@@ -447,23 +447,23 @@ function MovieApp({ user, setAppState, setUser }) {
   const triggerSmartAds = () => {
     const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
     const now = new Date().getTime();
-    
+
     // Check if 30 minutes (1800000 ms) have passed since the last ad
     if (!lastAdTime || (now - parseInt(lastAdTime)) > 1800000) {
-      triggerPopUnderAds(); 
+      triggerPopUnderAds();
       localStorage.setItem('cineflix_last_ad_time', now.toString()); // Save the new timestamp
     }
   };
 
   const handleWatchClick = (movie) => {
-    triggerSmartAds(); 
-    setPlayingVideo({ id: movie.id, type: movie.media_type }); 
+    triggerSmartAds();
+    setPlayingVideo({ id: movie.id, type: movie.media_type });
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    triggerSmartAds(); 
-    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
+    triggerSmartAds();
+    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
   };
 
   return (
@@ -560,6 +560,54 @@ function MovieApp({ user, setAppState, setUser }) {
             .main-content { padding-left: 80px; } .page-content { padding: 40px 40px 40px 10px; }
             .banner { height: 85vh; align-items: center; } .banner-fadeLeft { width: 45%; } .banner-fadeBottom { height: 35%; } .banner-contents { margin-left: 20px; padding: 0; } .banner-description { -webkit-line-clamp: 3; font-size: 1.05rem; } .banner-button { font-size: 1.05rem; padding: 10px 28px; } .rows-container { margin-top: -80px; padding-left: 20px; }
           }
+
+          /* 💎 LUXURY SEARCH BAR CSS 💎 */
+          .search-header { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            margin-top: 20px; 
+            margin-bottom: 40px; 
+            width: 100%; 
+          }
+          .search-input-wrapper { 
+            position: relative; 
+            width: 100%; 
+            max-width: 650px; 
+          }
+          .search-input { 
+            width: 100%; 
+            padding: 18px 25px 18px 55px; 
+            background: rgba(30, 30, 30, 0.8); 
+            border: 1px solid rgba(255, 255, 255, 0.15); 
+            border-radius: 50px; 
+            color: #fff; 
+            font-size: 1.1rem; 
+            font-weight: 500; 
+            outline: none; 
+            backdrop-filter: blur(10px); 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); 
+            transition: all 0.3s ease; 
+            font-family: 'Montserrat', sans-serif; 
+          }
+          .search-input::placeholder { color: #888; font-weight: 400; }
+          .search-input:focus { 
+            border-color: #E50914; 
+            background: rgba(40, 40, 40, 0.95); 
+            box-shadow: 0 8px 32px rgba(229, 9, 20, 0.25); 
+          }
+          .search-icon-inside { 
+            position: absolute; 
+            left: 20px; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            width: 22px; 
+            height: 22px; 
+            fill: #888; 
+            pointer-events: none; 
+            transition: fill 0.3s ease; 
+          }
+          .search-input:focus + .search-icon-inside { fill: #E50914; }
         `}
       </style>
 
@@ -614,8 +662,26 @@ function MovieApp({ user, setAppState, setUser }) {
         )}
         {activeTab === 'search' && (
           <div className="page-content">
-            <div className="search-header"><input type="text" className="search-input" placeholder="Search movies, series..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus /></div>
-            <div className="movies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{searchResults.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
+            <div className="search-header">
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search movies, TV shows..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+                <svg className="search-icon-inside" viewBox="0 0 24 24">
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                </svg>
+              </div>
+            </div>
+            <div className="movies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
+              {searchResults.map(movie => movie.poster_path && (
+                <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
+              ))}
+            </div>
           </div>
         )}
         {['tv', 'movies', 'trending'].includes(activeTab) && (
@@ -674,7 +740,7 @@ function MovieApp({ user, setAppState, setUser }) {
       {playingVideo && (
         <div className="fullscreen-player">
           <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
-          
+
           {/* FLOATING CONTROLS OVERLAY (Solves overlap & close button issues) */}
           <div className="player-controls-overlay">
             <div className="server-selector">
