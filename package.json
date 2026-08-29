@@ -10,10 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-oauth/google": "^0.13.5",
     "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",
-    "jwt-decode": "^4.0.0",
+    "firebase": "^12.18.0",
     "movie-trailer": "^3.2.3",
     "mysql2": "^3.24.2",
     "react": "^19.2.8",

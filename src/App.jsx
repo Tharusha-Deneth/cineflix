@@ -1,20 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
+
+// --- FIREBASE IMPORTS ---
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+
+// 👇 මෙතනට ඔයාගේ Firebase Config එක Paste කරන්න 👇
+const firebaseConfig = {
+  apiKey: "AIzaSyAfuAJn5pfVvsj_CHGjQT_PaOY2KzvMbnk",
+  authDomain: "cineflix-71ade.firebaseapp.com",
+  projectId: "cineflix-71ade",
+  storageBucket: "cineflix-71ade.firebasestorage.app",
+  messagingSenderId: "703022116674",
+  appId: "1:703022116674:web:1ce08f947669eb668a62db"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
+// -------------------------
 
 const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
-const BACKEND_URL = "/.netlify/functions/auth";
 
 export default function App() {
-  const [appState, setAppState] = useState('splash');
+  const [appState, setAppState] = useState('splash'); 
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('cineflix_user');
+    const savedUser = localStorage.getItem('cineflix_current_user');
     const loginTime = localStorage.getItem('cineflix_login_time');
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000; 
 
     let nextState = 'login';
     if (savedUser && loginTime) {
@@ -23,7 +40,7 @@ export default function App() {
         setUser(JSON.parse(savedUser));
         nextState = 'home';
       } else {
-        localStorage.removeItem('cineflix_user');
+        localStorage.removeItem('cineflix_current_user');
         localStorage.removeItem('cineflix_login_time');
       }
     }
@@ -62,8 +79,9 @@ export default function App() {
   );
 }
 
+// 1. SPLASH SCREEN
 function SplashScreen() {
-  const appName = "CINEFLIX";
+  const appName = "CINEFLIX"; 
   const letters = appName.split("");
 
   return (
@@ -110,7 +128,7 @@ function SplashScreen() {
   );
 }
 
-// 2. AUTH SCREEN
+// 2. AUTH SCREEN (FIREBASE INTEGRATED)
 function AuthScreen({ appState, setAppState, setUser }) {
   const isLogin = appState === 'login';
   const [showPass, setShowPass] = useState(false);
@@ -123,9 +141,9 @@ function AuthScreen({ appState, setAppState, setUser }) {
   const [loading, setLoading] = useState(false);
 
   const sliderImages = [
-    "https://image.tmdb.org/t/p/original/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg",
-    "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
-    "https://image.tmdb.org/t/p/original/gKkl37BQuKTanygYQG1pyYgLVgf.jpg"
+    "https://image.tmdb.org/t/p/original/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg", 
+    "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg", 
+    "https://image.tmdb.org/t/p/original/gKkl37BQuKTanygYQG1pyYgLVgf.jpg"  
   ];
 
   useEffect(() => {
@@ -136,7 +154,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
   }, []);
 
   const saveSessionAndNavigate = (userData) => {
-    localStorage.setItem('cineflix_user', JSON.stringify(userData));
+    localStorage.setItem('cineflix_current_user', JSON.stringify(userData));
     localStorage.setItem('cineflix_login_time', new Date().getTime().toString());
     setUser(userData);
     setAppState('home');
@@ -147,61 +165,51 @@ function AuthScreen({ appState, setAppState, setUser }) {
     setErrorMsg('');
     setLoading(true);
 
-    const action = isLogin ? 'login' : 'signup';
-    const payload = isLogin ? { action, email, password } : { action, full_name: fullName, email, password };
-
     try {
-      // කිසිම Timeout එකක් නැතුව කෙලින්ම request එක යවමු
-      const response = await fetch(BACKEND_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error("Server Error");
-      }
-
-      const result = await response.json();
-
-      if (result.status === 'success') {
-        saveSessionAndNavigate(result.user);
+      if (isLogin) {
+        // Firebase Login
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        saveSessionAndNavigate({
+          id: userCredential.user.uid,
+          name: userCredential.user.displayName || email.split('@')[0],
+          email: userCredential.user.email
+        });
       } else {
-        setErrorMsg(result.message || 'Authentication failed');
+        // Firebase Sign Up
+        if (!fullName) {
+          setErrorMsg("Full Name is required");
+          setLoading(false);
+          return;
+        }
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        saveSessionAndNavigate({
+          id: userCredential.user.uid,
+          name: fullName,
+          email: userCredential.user.email
+        });
       }
-    } catch (err) {
-      setErrorMsg("Network error. Please check your connection and try again.");
+    } catch (error) {
+      if (error.code === 'auth/email-already-in-use') setErrorMsg('Email is already registered. Please Log In.');
+      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setErrorMsg('Invalid email or password.');
+      else if (error.code === 'auth/weak-password') setErrorMsg('Password should be at least 6 characters.');
+      else setErrorMsg(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse) => {
+  const handleGoogleSignIn = async () => {
+    setErrorMsg('');
+    setLoading(true);
     try {
-      setLoading(true);
-      const decoded = jwtDecode(credentialResponse.credential);
-      const { name, email, sub } = decoded;
-
-      const response = await fetch(BACKEND_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'google_auth',
-          full_name: name,
-          email: email,
-          google_id: sub
-        })
+      const result = await signInWithPopup(auth, googleProvider);
+      saveSessionAndNavigate({
+        id: result.user.uid,
+        name: result.user.displayName || 'Google User',
+        email: result.user.email
       });
-
-      const result = await response.json();
-
-      if (result.status === 'success') {
-        saveSessionAndNavigate(result.user);
-      } else {
-        setErrorMsg(result.message);
-      }
-    } catch (err) {
-      setErrorMsg("Google Authentication processing error.");
+    } catch (error) {
+      setErrorMsg("Google Sign-In failed or cancelled.");
     } finally {
       setLoading(false);
     }
@@ -248,7 +256,13 @@ function AuthScreen({ appState, setAppState, setUser }) {
             padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 15px; text-align: center;
           }
 
-          .google-btn-wrapper { display: flex; justify-content: center; width: 100%; min-height: 40px; }
+          .google-btn-custom {
+            width: 100%; padding: 0.85rem; border-radius: 0.5rem; font-weight: 600;
+            background-color: #ffffff; color: #000000; cursor: pointer; border: none;
+            display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem;
+            transition: 0.3s;
+          }
+          .google-btn-custom:hover { background-color: #f1f1f1; box-shadow: 0 4px 15px rgba(255,255,255,0.2); }
 
           .login__line {
             position: relative; display: flex; justify-content: center; text-align: center;
@@ -335,16 +349,13 @@ function AuthScreen({ appState, setAppState, setUser }) {
             <h2 className="logo-title">CINEFLIX</h2>
             <h1 className="login__title">{isLogin ? 'Welcome Back 👋' : 'Create Account 🚀'}</h1>
             <p className="login__description">Please enter your details to sign in.</p>
+            
+            {/* Custom Google Login Button */}
+            <button type="button" className="google-btn-custom" onClick={handleGoogleSignIn} disabled={loading}>
+              <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style={{width: '20px'}}/>
+              {loading ? 'Processing...' : 'Sign in with Google'}
+            </button>
 
-            <div className="google-btn-wrapper">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setErrorMsg('Google Sign In failed')}
-                theme="filled_black"
-                shape="rectangular"
-                width={340} // මෙතැන width එක 340 ලෙස දෙන්න
-              />
-            </div>
           </div>
 
           <span className="login__line">or</span>
@@ -360,7 +371,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
                   className="login__input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  required
+                  required={!isLogin}
                 />
                 <i className="ri-user-line"></i>
               </div>
@@ -421,13 +432,11 @@ function MovieApp({ user, setAppState, setUser }) {
   const [searchResults, setSearchResults] = useState([]);
   const [gridData, setGridData] = useState([]);
 
-  // Single Movie View States (Showcase Design)
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [singleTrailerKey, setSingleTrailerKey] = useState("");
   const [singleMovieDetails, setSingleMovieDetails] = useState(null);
   const [similarMovies, setSimilarMovies] = useState([]);
 
-  // Video Player States
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
 
@@ -491,7 +500,6 @@ function MovieApp({ user, setAppState, setUser }) {
     fetchGridData();
   }, [activeTab]);
 
-  // Open Showcase Single Movie Page
   const openSingleMovie = async (movie) => {
     const type = movie.media_type || (movie.first_air_date ? 'tv' : 'movie');
     setSelectedMovie({ ...movie, media_type: type });
@@ -529,7 +537,7 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('cineflix_user');
+    localStorage.removeItem('cineflix_current_user');
     localStorage.removeItem('cineflix_login_time');
     setUser(null);
     setAppState('login');
@@ -624,7 +632,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .play-btn { background-color: #E50914; color: #ffffff; }
           .play-btn:hover { background-color: #c90812; transform: scale(1.03); }
 
-          /* Movie Rows with High-Intensity Zoom Animation */
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
           .row { margin-bottom: 30px; }
           .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
@@ -645,9 +652,7 @@ function MovieApp({ user, setAppState, setUser }) {
             box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5);
           }
 
-          /* ========================================================
-             SHOWCASE SINGLE MOVIE VIEW (Cinema Style Matching Image)
-             ======================================================== */
+          /* SINGLE MOVIE VIEW */
           .showcase-view {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background-color: #0b0b0b; z-index: 500; overflow-y: auto; overflow-x: hidden;
@@ -663,9 +668,7 @@ function MovieApp({ user, setAppState, setUser }) {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             pointer-events: none; opacity: 0.85;
           }
-          .showcase-bg-img {
-            width: 100%; height: 100%; object-fit: cover; opacity: 0.75;
-          }
+          .showcase-bg-img { width: 100%; height: 100%; object-fit: cover; opacity: 0.75; }
           .showcase-gradient-left {
             position: absolute; top: 0; left: 0; width: 65%; height: 100%;
             background: linear-gradient(90deg, #0b0b0be6 0%, #0b0b0bcc 50%, transparent 100%);
@@ -718,9 +721,7 @@ function MovieApp({ user, setAppState, setUser }) {
             display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
           }
 
-          .showcase-buttons {
-            display: flex; gap: 14px; margin-bottom: 1.5rem;
-          }
+          .showcase-buttons { display: flex; gap: 14px; margin-bottom: 1.5rem; }
           .btn-red-play {
             background-color: #E50914; color: #ffffff; padding: 12px 32px;
             font-size: 1rem; font-weight: 700; border-radius: 6px; border: none;
@@ -735,19 +736,14 @@ function MovieApp({ user, setAppState, setUser }) {
           }
           .btn-gray-download:hover { background-color: rgba(255,255,255,0.28); transform: scale(1.04); }
 
-          /* Bottom Slider for Single View matching Image */
           .showcase-bottom-carousel {
             position: relative; z-index: 10; padding: 1rem 2.5rem 2rem 2.5rem; width: 100%;
           }
           .showcase-carousel-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
           }
-          .showcase-carousel-title {
-            font-size: 1.1rem; font-weight: 700; color: #eaeaea;
-          }
-          .carousel-arrows {
-            display: flex; gap: 10px;
-          }
+          .showcase-carousel-title { font-size: 1.1rem; font-weight: 700; color: #eaeaea; }
+          .carousel-arrows { display: flex; gap: 10px; }
           .arrow-btn {
             background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
             color: white; width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
@@ -768,13 +764,10 @@ function MovieApp({ user, setAppState, setUser }) {
             transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease;
           }
           .showcase-card:hover {
-            transform: scale(1.25);
-            z-index: 40;
-            border-color: #E50914;
+            transform: scale(1.25); z-index: 40; border-color: #E50914;
             box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6);
           }
 
-          /* Fullscreen Video Player */
           .fullscreen-player {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background-color: #000; z-index: 9999; display: flex; flex-direction: column;
@@ -839,7 +832,7 @@ function MovieApp({ user, setAppState, setUser }) {
 
       {/* Desktop Sidebar */}
       <nav className="sidebar">
-        <svg onClick={() => setActiveTab('search')} className={`nav-icon ${activeTab === 'search' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
+        <svg onClick={() => setActiveTab('search')} className={`nav-icon ${activeTab === 'search' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 14z" /></svg>
         <svg onClick={() => setActiveTab('home')} className={`nav-icon ${activeTab === 'home' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
         <svg onClick={() => setActiveTab('tv')} className={`nav-icon ${activeTab === 'tv' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg>
         <svg onClick={() => setActiveTab('movies')} className={`nav-icon ${activeTab === 'movies' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg>
@@ -850,7 +843,7 @@ function MovieApp({ user, setAppState, setUser }) {
         </div>
       </nav>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Mobile Bottom Nav */}
       <div className="bottom-nav">
         <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
           <svg className="nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
@@ -949,9 +942,6 @@ function MovieApp({ user, setAppState, setUser }) {
         )}
       </main>
 
-      {/* ========================================================================
-          SHOWCASE SINGLE MOVIE VIEW (Cinema Style Matching Uploaded Image)
-         ======================================================================== */}
       {selectedMovie && (
         <div className="showcase-view">
           <div className="showcase-bg-wrapper">
@@ -1028,7 +1018,6 @@ function MovieApp({ user, setAppState, setUser }) {
         </div>
       )}
 
-      {/* MULTI-SERVER RELIABLE VIDEO PLAYER */}
       {playingVideo && (
         <div className="fullscreen-player">
           <div className="player-header">
