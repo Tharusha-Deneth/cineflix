@@ -26,23 +26,24 @@ exports.handler = async (event) => {
 
   const { action, full_name, email, password, google_id } = data;
 
-  // 1. බොරු ඊමේල් පරීක්ෂාව (Real Email Validation)
   if (email && !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
     return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Please enter a valid real email address' }) };
   }
 
+  let connection; // Connection එක එළියෙන් හදමු
+
   try {
-    // 2. Aiven Database එකට සම්බන්ධ වීම
-    const connection = await mysql.createConnection({
+    // 8-second Timeout එකක් දාලා Connect කරමු (502 Error එක නවත්වන්න)
+    connection = await mysql.createConnection({
       host: 'mysql-f149e35-cineflix.l.aivencloud.com',
       port: 18408,
       user: 'avnadmin',
       password: 'AVNS_kHcyMX3jHgBvSRy4oDh',
       database: 'defaultdb',
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
+      connectTimeout: 8000 
     });
 
-    // 🔥 MAGIC FIX: Workbench නැතිව ඉබේම Table එක හදයි! 🔥
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -54,113 +55,84 @@ exports.handler = async (event) => {
       )
     `);
 
-    // 3. Manual Sign Up ක්‍රියාවලිය
     if (action === 'signup') {
       if (!full_name || !email || !password) {
-        await connection.end();
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'All fields are required' }) };
       }
-
       const [existing] = await connection.execute('SELECT id FROM users WHERE email = ?', [email]);
       if (existing.length > 0) {
-        await connection.end();
-        return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'This email is already registered. Please Log In.' }) };
+        return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Email already registered. Please Log In.' }) };
       }
-
       const hashedPassword = await bcrypt.hash(password, 10);
       const [result] = await connection.execute(
         'INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)',
         [full_name, email, hashedPassword]
       );
-
-      await connection.end();
       return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          status: 'success',
-          message: 'Registration successful',
+        statusCode: 200, headers, body: JSON.stringify({
+          status: 'success', message: 'Registration successful',
           user: { id: result.insertId, name: full_name, email }
         })
       };
     }
 
-    // 4. Manual Log In ක්‍රියාවලිය
     if (action === 'login') {
       if (!email || !password) {
-        await connection.end();
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'All fields are required' }) };
       }
-
       const [users] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
       if (users.length === 0) {
-        await connection.end();
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Email not found. Please Sign Up first.' }) };
       }
-
       const user = users[0];
       const isMatch = await bcrypt.compare(password, user.password);
-      await connection.end();
-
       if (!isMatch) {
         return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Incorrect password!' }) };
       }
-
       return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          status: 'success',
-          message: 'Login successful',
+        statusCode: 200, headers, body: JSON.stringify({
+          status: 'success', message: 'Login successful',
           user: { id: user.id, name: user.full_name, email: user.email }
         })
       };
     }
 
-    // 5. Google Auth ක්‍රියාවලිය
     if (action === 'google_auth') {
       const [users] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
-
       if (users.length > 0) {
         const user = users[0];
-        await connection.end();
         return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            status: 'success',
-            message: 'Google login successful',
+          statusCode: 200, headers, body: JSON.stringify({
+            status: 'success', message: 'Google login successful',
             user: { id: user.id, name: user.full_name, email: user.email }
           })
         };
       }
-
       const randomPassword = await bcrypt.hash(Math.random().toString(36), 10);
       const [result] = await connection.execute(
         'INSERT INTO users (full_name, email, password, google_id) VALUES (?, ?, ?, ?)',
         [full_name || 'Google User', email, randomPassword, google_id || 'google_oauth']
       );
-
-      await connection.end();
       return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          status: 'success',
-          message: 'Google registration successful',
+        statusCode: 200, headers, body: JSON.stringify({
+          status: 'success', message: 'Google registration successful',
           user: { id: result.insertId, name: full_name || 'Google User', email }
         })
       };
     }
 
-    await connection.end();
     return { statusCode: 200, headers, body: JSON.stringify({ status: 'error', message: 'Invalid action' }) };
   } catch (error) {
-    // මොකක් හරි Database අවුලක් ආවොත් කෙලින්ම Screen එකේ පෙන්නයි
+    // 502 Error එක වෙනුවට නිවැරදි JSON Error එකක් යැවීම
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ status: 'error', message: "DB Error: " + (error.message || String(error)) })
+      body: JSON.stringify({ status: 'error', message: "Database timeout. Please try again." })
     };
+  } finally {
+    // අනිවාර්යයෙන්ම Connection එක Close කිරීම (Crash වීම වළක්වයි)
+    if (connection) {
+      try { await connection.end(); } catch (err) {}
+    }
   }
 };

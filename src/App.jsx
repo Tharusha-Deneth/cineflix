@@ -8,13 +8,13 @@ const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 const BACKEND_URL = "/.netlify/functions/auth";
 
 export default function App() {
-  const [appState, setAppState] = useState('splash'); 
+  const [appState, setAppState] = useState('splash');
   const [user, setUser] = useState(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('cineflix_user');
     const loginTime = localStorage.getItem('cineflix_login_time');
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000; 
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
     let nextState = 'login';
     if (savedUser && loginTime) {
@@ -62,9 +62,8 @@ export default function App() {
   );
 }
 
-// 1. SPLASH SCREEN
 function SplashScreen() {
-  const appName = "CINEFLIX"; 
+  const appName = "CINEFLIX";
   const letters = appName.split("");
 
   return (
@@ -124,9 +123,9 @@ function AuthScreen({ appState, setAppState, setUser }) {
   const [loading, setLoading] = useState(false);
 
   const sliderImages = [
-    "https://image.tmdb.org/t/p/original/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg", 
-    "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg", 
-    "https://image.tmdb.org/t/p/original/gKkl37BQuKTanygYQG1pyYgLVgf.jpg"  
+    "https://image.tmdb.org/t/p/original/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg",
+    "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
+    "https://image.tmdb.org/t/p/original/gKkl37BQuKTanygYQG1pyYgLVgf.jpg"
   ];
 
   useEffect(() => {
@@ -153,7 +152,8 @@ function AuthScreen({ appState, setAppState, setUser }) {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-sec timeout
+      // Timeout එක වැඩි කළා Database එකට connect වෙන්න වෙලාව දෙන්න
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const response = await fetch(BACKEND_URL, {
         method: 'POST',
@@ -163,6 +163,11 @@ function AuthScreen({ appState, setAppState, setUser }) {
       });
       clearTimeout(timeoutId);
 
+      // 502 හෝ 500 error එකක් ආවොත් අල්ලගන්න
+      if (!response.ok) {
+        throw new Error("Server Error: " + response.status);
+      }
+
       const result = await response.json();
 
       if (result.status === 'success') {
@@ -171,13 +176,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
         setErrorMsg(result.message || 'Authentication failed');
       }
     } catch (err) {
-      // Offline / Function timeout fallback
-      console.warn("Backend connection delayed. Proceeding with safe session creation.");
-      saveSessionAndNavigate({
-        id: Date.now(),
-        name: isLogin ? email.split('@')[0] : fullName,
-        email: email
-      });
+      setErrorMsg("Connection Timeout. DB is waking up, try again in 5s.");
     } finally {
       setLoading(false);
     }
@@ -342,7 +341,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
           ))}
           <div className="login__swiper-data">
             <p className="login__swiper-subtitle">Now Streaming</p>
-            <h1 className="login__swiper-title">Unlimited Movies <br/> & TV Shows</h1>
+            <h1 className="login__swiper-title">Unlimited Movies <br /> & TV Shows</h1>
           </div>
           <div className="swiper-pagination">
             {sliderImages.map((_, index) => (
@@ -356,14 +355,14 @@ function AuthScreen({ appState, setAppState, setUser }) {
             <h2 className="logo-title">CINEFLIX</h2>
             <h1 className="login__title">{isLogin ? 'Welcome Back 👋' : 'Create Account 🚀'}</h1>
             <p className="login__description">Please enter your details to sign in.</p>
-            
+
             <div className="google-btn-wrapper">
               <GoogleLogin
                 onSuccess={handleGoogleSuccess}
                 onError={() => setErrorMsg('Google Sign In failed')}
                 theme="filled_black"
                 shape="rectangular"
-                width="100%"
+                width={340} // මෙතැන width එක 340 ලෙස දෙන්න
               />
             </div>
           </div>
@@ -375,44 +374,44 @@ function AuthScreen({ appState, setAppState, setUser }) {
           <form className="login__form" onSubmit={handleAuthSubmit}>
             {!isLogin && (
               <div className="login__box">
-                <input 
-                  type="text" 
-                  placeholder="Full Name" 
-                  className="login__input" 
-                  value={fullName} 
-                  onChange={(e) => setFullName(e.target.value)} 
-                  required 
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  className="login__input"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
                 />
                 <i className="ri-user-line"></i>
               </div>
             )}
-            
+
             <div className="login__box">
-              <input 
-                type="email" 
-                placeholder="Email Address" 
-                className="login__input" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
+              <input
+                type="email"
+                placeholder="Email Address"
+                className="login__input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
               />
               <i className="ri-mail-line"></i>
             </div>
 
             <div className="login__box">
-              <input 
-                type={showPass ? "text" : "password"} 
-                placeholder="Password" 
-                className="login__input" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
+              <input
+                type={showPass ? "text" : "password"}
+                placeholder="Password"
+                className="login__input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
               <i className={`ri-eye${showPass ? '-off' : ''}-line login__eye`} onClick={() => setShowPass(!showPass)}></i>
             </div>
 
             {isLogin && <a href="#" className="login__forgot">Forgot Password?</a>}
-            
+
             <button type="submit" className="login__button" disabled={loading}>
               {loading ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
             </button>
@@ -447,7 +446,7 @@ function MovieApp({ user, setAppState, setUser }) {
   const [singleTrailerKey, setSingleTrailerKey] = useState("");
   const [singleMovieDetails, setSingleMovieDetails] = useState(null);
   const [similarMovies, setSimilarMovies] = useState([]);
-  
+
   // Video Player States
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
@@ -472,7 +471,7 @@ function MovieApp({ user, setAppState, setUser }) {
         if (originalsData.results && originalsData.results.length > 0) {
           const randomMovie = originalsData.results[Math.floor(Math.random() * originalsData.results.length)];
           setBannerMovie(randomMovie);
-          
+
           if (randomMovie?.id) {
             const videoRes = await fetch(`${BASE_URL}/tv/${randomMovie.id}/videos?api_key=${API_KEY}`);
             const videoData = await videoRes.json();
@@ -480,7 +479,7 @@ function MovieApp({ user, setAppState, setUser }) {
             if (trailer) setTrailerKey(trailer.key);
           }
         }
-      } catch (error) {}
+      } catch (error) { }
     };
     fetchHomeData();
   }, [activeTab]);
@@ -535,7 +534,7 @@ function MovieApp({ user, setAppState, setUser }) {
 
       const trailer = videoData.results?.find(vid => vid.type === "Trailer") || videoData.results?.[0];
       if (trailer) setSingleTrailerKey(trailer.key);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const scrollCarousel = (direction) => {
@@ -850,43 +849,43 @@ function MovieApp({ user, setAppState, setUser }) {
         <span className="mobile-logo">CINEFLIX</span>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           <svg onClick={() => setActiveTab('search')} style={{ width: '22px', height: '22px', fill: '#fff', cursor: 'pointer' }} viewBox="0 0 24 24">
-            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
           </svg>
           <svg onClick={handleLogout} style={{ width: '22px', height: '22px', fill: '#E50914', cursor: 'pointer' }} viewBox="0 0 24 24">
-            <path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z"/>
+            <path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" />
           </svg>
         </div>
       </header>
 
       {/* Desktop Sidebar */}
       <nav className="sidebar">
-        <svg onClick={() => setActiveTab('search')} className={`nav-icon ${activeTab === 'search' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        <svg onClick={() => setActiveTab('home')} className={`nav-icon ${activeTab === 'home' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-        <svg onClick={() => setActiveTab('tv')} className={`nav-icon ${activeTab === 'tv' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
-        <svg onClick={() => setActiveTab('movies')} className={`nav-icon ${activeTab === 'movies' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z"/></svg>
-        <svg onClick={() => setActiveTab('trending')} className={`nav-icon ${activeTab === 'trending' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
-        
+        <svg onClick={() => setActiveTab('search')} className={`nav-icon ${activeTab === 'search' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
+        <svg onClick={() => setActiveTab('home')} className={`nav-icon ${activeTab === 'home' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+        <svg onClick={() => setActiveTab('tv')} className={`nav-icon ${activeTab === 'tv' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg>
+        <svg onClick={() => setActiveTab('movies')} className={`nav-icon ${activeTab === 'movies' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg>
+        <svg onClick={() => setActiveTab('trending')} className={`nav-icon ${activeTab === 'trending' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" /></svg>
+
         <div style={{ marginTop: 'auto', marginBottom: '20px' }}>
-          <svg onClick={handleLogout} className="nav-icon" title="Logout" style={{ fill: '#E50914' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z"/></svg>
+          <svg onClick={handleLogout} className="nav-icon" title="Logout" style={{ fill: '#E50914' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" /></svg>
         </div>
       </nav>
 
       {/* Mobile Bottom Navigation Bar */}
       <div className="bottom-nav">
         <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
           <span>Home</span>
         </div>
         <div className={`nav-item ${activeTab === 'tv' ? 'active' : ''}`} onClick={() => setActiveTab('tv')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg>
           <span>TV Shows</span>
         </div>
         <div className={`nav-item ${activeTab === 'movies' ? 'active' : ''}`} onClick={() => setActiveTab('movies')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z"/></svg>
+          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg>
           <span>Movies</span>
         </div>
         <div className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`} onClick={() => setActiveTab('trending')}>
-          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+          <svg className="nav-icon" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" /></svg>
           <span>Trending</span>
         </div>
       </div>
@@ -992,7 +991,7 @@ function MovieApp({ user, setAppState, setUser }) {
 
           <div className="showcase-body">
             <h1 className="showcase-huge-title">{selectedMovie.title || selectedMovie.name}</h1>
-            
+
             {singleMovieDetails?.tagline && (
               <div className="showcase-tagline">{singleMovieDetails.tagline}</div>
             )}
@@ -1007,20 +1006,20 @@ function MovieApp({ user, setAppState, setUser }) {
             <p className="showcase-overview">{selectedMovie.overview}</p>
 
             <div className="showcase-buttons">
-              <button 
-                className="btn-red-play" 
+              <button
+                className="btn-red-play"
                 onClick={() => setPlayingVideo({ id: selectedMovie.id, type: selectedMovie.media_type })}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> Play
               </button>
 
-              <a 
-                href={`https://dl.vidsrc.vip/movie/${selectedMovie.id}`} 
-                target="_blank" 
-                rel="noreferrer" 
+              <a
+                href={`https://dl.vidsrc.vip/movie/${selectedMovie.id}`}
+                target="_blank"
+                rel="noreferrer"
                 className="btn-gray-download"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Download
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg> Download
               </a>
             </div>
           </div>
@@ -1036,10 +1035,10 @@ function MovieApp({ user, setAppState, setUser }) {
 
             <div className="showcase-cards-scroll" ref={carouselRef}>
               {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && (
-                <img 
-                  key={m.id} 
-                  src={`${IMAGE_BASE_URL}${m.poster_path}`} 
-                  alt={m.title || m.name} 
+                <img
+                  key={m.id}
+                  src={`${IMAGE_BASE_URL}${m.poster_path}`}
+                  alt={m.title || m.name}
                   className="showcase-card"
                   onClick={() => openSingleMovie(m)}
                 />
@@ -1061,11 +1060,11 @@ function MovieApp({ user, setAppState, setUser }) {
             </div>
             <button className="close-player-btn" onClick={() => setPlayingVideo(null)}>✕</button>
           </div>
-          
-          <iframe 
-            className="player-iframe" 
-            src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} 
-            allowFullScreen 
+
+          <iframe
+            className="player-iframe"
+            src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)}
+            allowFullScreen
             frameBorder="0"
           />
         </div>
