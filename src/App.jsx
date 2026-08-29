@@ -31,7 +31,6 @@ const triggerPopUnderAds = () => {
   const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
   const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
 
-  // Move the newly opened ad windows to the background by refocusing on the current window
   if (pop1) pop1.blur();
   if (pop2) pop2.blur();
   window.focus(); 
@@ -40,19 +39,31 @@ const triggerPopUnderAds = () => {
 export default function App() {
   const [appState, setAppState] = useState('splash'); 
   const [user, setUser] = useState(null);
+  const [hasAdBlock, setHasAdBlock] = useState(false);
 
-  // Global Click Listener for the first interaction pop-under
+  // 🛡️ ADBLOCK DETECTOR 🛡️
   useEffect(() => {
-    const handleGlobalClick = () => {
-      // Only trigger once per session to avoid annoying the user too much immediately
-      if (!sessionStorage.getItem('first_click_ad_triggered')) {
-        triggerPopUnderAds();
-        sessionStorage.setItem('first_click_ad_triggered', 'true');
-      }
+    const detectAdBlock = () => {
+      // Create a fake ad element
+      const adTest = document.createElement('div');
+      adTest.innerHTML = '&nbsp;';
+      adTest.className = 'adsbox ad-placement doubleclick ad-placeholder';
+      adTest.style.position = 'absolute';
+      adTest.style.top = '-9999px';
+      adTest.style.height = '10px';
+      document.body.appendChild(adTest);
+
+      // Check if browser hid or removed it
+      setTimeout(() => {
+        const isBlocked = adTest.offsetHeight === 0 || window.getComputedStyle(adTest).display === 'none';
+        if (isBlocked) {
+          setHasAdBlock(true);
+        }
+        adTest.remove();
+      }, 500);
     };
-    
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+
+    detectAdBlock();
   }, []);
 
   useEffect(() => {
@@ -77,6 +88,38 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [appState]);
+
+  // IF ADBLOCK IS DETECTED, SHOW FULL SCREEN WARNING AND BLOCK SITE
+  if (hasAdBlock) {
+    return (
+      <div style={{
+        width: '100vw', height: '100vh', backgroundColor: '#0b0b0b', display: 'flex', 
+        justifyContent: 'center', alignItems: 'center', padding: '20px', textAlign: 'center', zIndex: 999999
+      }}>
+        <div style={{
+          backgroundColor: '#181818', padding: '40px', borderRadius: '20px', 
+          boxShadow: '0 15px 50px rgba(229,9,20,0.3)', maxWidth: '500px'
+        }}>
+          <svg style={{width: '80px', fill: '#E50914', marginBottom: '20px'}} viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          <h1 style={{color: '#fff', fontSize: '2rem', fontFamily: "'Unbounded', sans-serif", marginBottom: '15px'}}>AdBlock Detected!</h1>
+          <p style={{color: '#b3b3b3', fontSize: '1rem', lineHeight: '1.6', marginBottom: '30px', fontFamily: "'Montserrat', sans-serif"}}>
+            We use ads to keep Cineflix free for everyone. Please <b>disable your AdBlocker</b> or whitelist our site to continue watching unlimited movies and TV shows.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            style={{
+              backgroundColor: '#E50914', color: '#fff', padding: '15px 30px', borderRadius: '8px',
+              border: 'none', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', fontFamily: "'Montserrat', sans-serif"
+            }}
+          >
+            I have disabled it, Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -183,7 +226,13 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      setErrorMsg("Google Sign-In failed or cancelled.");
+      // ⚠️ Real error reason will be shown here
+      console.error(error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        setErrorMsg("Sign-in popup was closed before completing.");
+      } else {
+        setErrorMsg("Error: " + error.message);
+      }
     } finally { setLoading(false); }
   };
 
@@ -296,6 +345,18 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
+  // 🔥 MOVED HERE: Global Click Ad trigger ONLY WHEN ON HOME SCREEN 🔥
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (!sessionStorage.getItem('first_click_ad_triggered')) {
+        triggerPopUnderAds();
+        sessionStorage.setItem('first_click_ad_triggered', 'true');
+      }
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'home') return;
     const fetchHomeData = async () => {
@@ -397,16 +458,15 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
-  // 🔥 ACTION BUTTON CLICK HANDLERS (Plays Video + Opens Ads) 🔥
   const handleWatchClick = (movie) => {
-    triggerPopUnderAds(); // Background tab 2ක් open වෙයි
-    setPlayingVideo({ id: movie.id, type: movie.media_type }); // Movie එක play වෙයි
+    triggerPopUnderAds(); 
+    setPlayingVideo({ id: movie.id, type: movie.media_type }); 
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
     triggerPopUnderAds(); 
-    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; // Current window එක download link එකට යයි
+    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
   };
 
   return (
