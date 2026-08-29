@@ -443,14 +443,26 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
+  // 🔥 Smart 30-Minute Ad Logic 🔥
+  const triggerSmartAds = () => {
+    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
+    const now = new Date().getTime();
+    
+    // Check if 30 minutes (1800000 ms) have passed since the last ad
+    if (!lastAdTime || (now - parseInt(lastAdTime)) > 1800000) {
+      triggerPopUnderAds(); 
+      localStorage.setItem('cineflix_last_ad_time', now.toString()); // Save the new timestamp
+    }
+  };
+
   const handleWatchClick = (movie) => {
-    triggerPopUnderAds(); 
+    triggerSmartAds(); 
     setPlayingVideo({ id: movie.id, type: movie.media_type }); 
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    triggerPopUnderAds(); 
+    triggerSmartAds(); 
     window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
   };
 
@@ -459,6 +471,14 @@ function MovieApp({ user, setAppState, setUser }) {
       <style>
         {`
           .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
+          
+          /* FIXED: Perfectly Left-Aligned Texts */
+          .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+          .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin: 0 0 4px 0 !important; padding: 0 !important; text-transform: uppercase; letter-spacing: 1px; }
+          .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0 !important; padding: 0 !important; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
+          .banner-description { font-size: 0.88rem; line-height: 1.4; margin: 0 0 16px 0 !important; padding: 0 !important; color: #d0d0d0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+          .banner-buttons { display: flex; gap: 12px; margin: 0 !important; padding: 0 !important;}
+
           .mobile-header { position: fixed; top: 0; left: 0; width: 100%; height: 60px; background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 1.25rem; z-index: 100; }
           .mobile-logo { font-family: 'Unbounded', sans-serif; font-size: 1.3rem; font-weight: 900; color: #E50914; letter-spacing: 1px; }
           .sidebar { display: none; }
@@ -472,11 +492,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .banner-video { width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
           .banner-fadeLeft { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(11,11,11,0.9) 0%, rgba(11,11,11,0.2) 60%, transparent 100%); z-index: 2; }
           .banner-fadeBottom { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(180deg, transparent 0%, rgba(11,11,11,0.85) 60%, #0b0b0b 100%); z-index: 2; }
-          .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; }
-          .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
-          .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin-bottom: 8px; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
-          .banner-description { font-size: 0.88rem; line-height: 1.4; margin-bottom: 16px; color: #d0d0d0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-          .banner-buttons { display: flex; gap: 12px; }
           .banner-button { cursor: pointer; font-weight: bold; font-size: 0.95rem; border-radius: 6px; padding: 8px 22px; border: none; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
           .play-btn { background-color: #E50914; color: #ffffff; } .play-btn:hover { background-color: #c90812; transform: scale(1.03); }
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
@@ -484,16 +499,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
           .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
           .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
-          
-          /* FIXED: Fullscreen Player Header Setup */
-          .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; flex-direction: column; }
-          .player-header { width: 100%; min-height: 60px; background-color: #111; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10000; border-bottom: 2px solid #222; }
-          .server-selector { display: flex; gap: 8px; align-items: center; }
-          .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
-          .server-btn.active { background: #E50914; border-color: #E50914; }
-          .close-player-btn { background: rgba(0,0,0,0.7); color: white; border: 2px solid white; border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-          .close-player-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
-          .player-iframe { width: 100%; flex-grow: 1; border: none; background-color: #000; }
           
           .showcase-view { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #0b0b0b; z-index: 500; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; justify-content: space-between; animation: fadeIn 0.4s ease-out; }
           .showcase-bg-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
@@ -505,17 +510,21 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-logo { font-family: 'Unbounded', sans-serif; font-size: 1.5rem; font-weight: 900; color: #E50914; letter-spacing: 2px; }
           .showcase-close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: 0.2s; }
           .showcase-close-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
-          .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; max-width: 650px; }
-          .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
-          .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin-bottom: 12px; }
-          .showcase-metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 0.88rem; color: #cfcfcf; margin-bottom: 15px; font-weight: 600; }
+          
+          /* FIXED: Showcase perfectly left aligned */
+          .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; max-width: 650px; }
+          .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0 !important; padding: 0 !important; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
+          .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin: 0 0 12px 0 !important; padding: 0 !important; }
+          .showcase-metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 0.88rem; color: #cfcfcf; margin: 0 0 15px 0 !important; padding: 0 !important; font-weight: 600; }
           .stars-rating { color: #E50914; font-size: 1rem; letter-spacing: 2px; }
-          .showcase-overview { font-size: 0.95rem; line-height: 1.6; color: #b8b8b8; margin-bottom: 25px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-          .showcase-buttons { display: flex; gap: 14px; margin-bottom: 1.5rem; }
+          .showcase-overview { font-size: 0.95rem; line-height: 1.6; color: #b8b8b8; margin: 0 0 25px 0 !important; padding: 0 !important; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+          .showcase-buttons { display: flex; gap: 14px; margin: 0 0 1.5rem 0 !important; padding: 0 !important; }
+          
           .btn-red-play { background-color: #E50914; color: #ffffff; padding: 12px 32px; font-size: 1rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; }
           .btn-red-play:hover { background-color: #f40612; transform: scale(1.04); }
           .btn-gray-download { background-color: rgba(255,255,255,0.18); color: #ffffff; padding: 12px 28px; font-size: 1rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; text-decoration: none; backdrop-filter: blur(8px); }
           .btn-gray-download:hover { background-color: rgba(255,255,255,0.28); transform: scale(1.04); }
+          
           .showcase-bottom-carousel { position: relative; z-index: 10; padding: 1rem 2.5rem 2rem 2.5rem; width: 100%; }
           .showcase-carousel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
           .showcase-carousel-title { font-size: 1.1rem; font-weight: 700; color: #eaeaea; }
@@ -525,6 +534,24 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-cards-scroll { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch; } .showcase-cards-scroll::-webkit-scrollbar { display: none; }
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
+
+          /* FIXED: Video Player with Floating Elegant UI */
+          .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
+          .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
+          
+          .player-controls-overlay {
+            position: absolute; top: 20px; right: 20px; z-index: 10000;
+            display: flex; align-items: center; gap: 15px;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            padding: 8px 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+            transition: opacity 0.3s;
+          }
+          .player-controls-overlay:hover { opacity: 1; }
+          .server-selector { display: flex; gap: 8px; align-items: center; }
+          .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 5px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
+          .server-btn.active { background: #E50914; border-color: #E50914; box-shadow: 0 0 10px rgba(229, 9, 20, 0.5); }
+          .close-player-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+          .close-player-btn:hover { background: #E50914; transform: scale(1.1); }
 
           @media screen and (min-width: 900px) {
             .app-container { padding-bottom: 0; } .mobile-header, .bottom-nav { display: none; }
@@ -646,16 +673,19 @@ function MovieApp({ user, setAppState, setUser }) {
 
       {playingVideo && (
         <div className="fullscreen-player">
-          <div className="player-header">
+          <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
+          
+          {/* FLOATING CONTROLS OVERLAY (Solves overlap & close button issues) */}
+          <div className="player-controls-overlay">
             <div className="server-selector">
-              <span style={{ fontSize: '0.85rem', color: '#aaa', marginRight: '5px' }}>Servers:</span>
-              <button className={`server-btn ${activeServer === 1 ? 'active' : ''}`} onClick={() => setActiveServer(1)}>Server 1</button>
-              <button className={`server-btn ${activeServer === 2 ? 'active' : ''}`} onClick={() => setActiveServer(2)}>Server 2</button>
-              <button className={`server-btn ${activeServer === 3 ? 'active' : ''}`} onClick={() => setActiveServer(3)}>Server 3</button>
+              <span style={{ fontSize: '0.85rem', color: '#fff', marginRight: '5px', fontWeight: 'bold' }}>Server:</span>
+              <button className={`server-btn ${activeServer === 1 ? 'active' : ''}`} onClick={() => setActiveServer(1)}>1</button>
+              <button className={`server-btn ${activeServer === 2 ? 'active' : ''}`} onClick={() => setActiveServer(2)}>2</button>
+              <button className={`server-btn ${activeServer === 3 ? 'active' : ''}`} onClick={() => setActiveServer(3)}>3</button>
             </div>
+            <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
             <button className="close-player-btn" onClick={() => setPlayingVideo(null)}>✕</button>
           </div>
-          <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
         </div>
       )}
     </div>
