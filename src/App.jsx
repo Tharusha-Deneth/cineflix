@@ -24,30 +24,34 @@ const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
 // 🚀 SMART AD LOGIC (Mobile Return & Desktop Limits) 🚀
-const triggerSmartAds = (movie, action) => {
+const triggerSmartAds = () => {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
   const now = new Date().getTime();
   
-  // පැය 1ක් යනකම් ආයේ Ads එන්නේ නෑ
+  // පැය 1ක් (මිලි තත්පර 3600000) යනකම් ආයේ Ads එන්නේ නෑ
   const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
 
   if (canShowAd) {
     localStorage.setItem('cineflix_last_ad_time', now.toString());
 
     if (isMobile) {
-      sessionStorage.setItem('cineflix_saved_movie', JSON.stringify(movie));
-      sessionStorage.setItem('cineflix_pending_action', action);
-      window.location.href = ADSTERRA_DIRECT_LINK;
-      return true; 
-    } else {
+      // Mobile: Open Ad in a new tab silently (doesn't force reload current tab)
       const windowName = 'adWindow' + Math.random();
-      const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
-      if (pop) pop.blur();
+      window.open(ADSTERRA_DIRECT_LINK, windowName);
+    } else {
+      // Desktop: Open 2 pop-under tabs securely
+      const windowName1 = 'adWindow' + Math.random();
+      const windowName2 = 'adWindow' + Math.random();
+      
+      const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
+      const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
+
+      if (pop1) pop1.blur();
+      if (pop2) pop2.blur();
       window.focus();
     }
   }
-  return false; 
 };
 
 const getInitialState = () => {
@@ -68,18 +72,7 @@ export default function App() {
   });
   const [hasAdBlock, setHasAdBlock] = useState(false);
 
-  useEffect(() => {
-    const isReturning = sessionStorage.getItem('returning_from_ad');
-    if (isReturning) {
-      sessionStorage.removeItem('returning_from_ad');
-      const savedUser = localStorage.getItem('cineflix_current_user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        setAppState('home');
-      }
-    }
-  }, []);
-
+  // 🛡️ ADBLOCK DETECTOR 🛡️
   useEffect(() => {
     const detectAdBlock = () => {
       const adTest = document.createElement('div');
@@ -92,13 +85,16 @@ export default function App() {
 
       setTimeout(() => {
         const isBlocked = adTest.offsetHeight === 0 || window.getComputedStyle(adTest).display === 'none';
-        if (isBlocked) setHasAdBlock(true);
+        if (isBlocked) {
+          setHasAdBlock(true);
+        }
         adTest.remove();
       }, 500);
     };
     detectAdBlock();
   }, []);
 
+  // Splash Screen Timer
   useEffect(() => {
     if (appState === 'splash') {
       const timer = setTimeout(() => setAppState('login'), 7000);
@@ -211,12 +207,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      console.error(error);
-      if (error.code === 'auth/popup-closed-by-user') {
-        setErrorMsg("Sign-in popup was closed before completing.");
-      } else {
-        setErrorMsg("Error: " + error.message);
-      }
+      setErrorMsg("Sign-in failed or cancelled.");
     } finally { setLoading(false); }
   };
 
@@ -328,23 +319,31 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
-  // 🚀 RESTORE STATE AFTER MOBILE AD RETURN 🚀
+  // Handle browser 'back' button explicitly so it doesn't reload the app
   useEffect(() => {
-    const savedMovieStr = sessionStorage.getItem('cineflix_saved_movie');
-    const pendingAction = sessionStorage.getItem('cineflix_pending_action');
-
-    if (savedMovieStr) {
-      try {
-        const movie = JSON.parse(savedMovieStr);
-        openSingleMovie(movie); 
-        if (pendingAction === 'play') {
-          setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
-        }
-      } catch (e) { }
-      sessionStorage.removeItem('cineflix_saved_movie');
-      sessionStorage.removeItem('cineflix_pending_action');
-    }
-  }, []);
+    const handlePopState = (e) => {
+      // If a video is playing, close video instead of going back
+      if (playingVideo) {
+        e.preventDefault();
+        setPlayingVideo(null);
+        window.history.pushState(null, null, window.location.pathname);
+      } 
+      // If single movie view is open, close it instead of going back
+      else if (selectedMovie) {
+        e.preventDefault();
+        setSelectedMovie(null);
+        window.history.pushState(null, null, window.location.pathname);
+      }
+    };
+    
+    // Push a dummy state to history so we can catch the back button
+    window.history.pushState(null, null, window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [playingVideo, selectedMovie]);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -448,18 +447,14 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   const handleWatchClick = (movie) => {
-    const redirected = triggerSmartAds(movie, 'play');
-    if (!redirected) {
-      setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
-    }
+    triggerSmartAds(); 
+    setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') }); 
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    const redirected = triggerSmartAds(movie, 'download');
-    if (!redirected) {
-      window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
-    }
+    triggerSmartAds(); 
+    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
   };
 
   // 🔥 FULL SCREEN VIDEO LOGIC WITH ORIENTATION LOCK 🔥
@@ -503,7 +498,6 @@ function MovieApp({ user, setAppState, setUser }) {
     }
   };
 
-  // Ensure orientation unlocks if the player is closed completely
   const closePlayer = () => {
     if (document.fullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen();
@@ -544,8 +538,10 @@ function MovieApp({ user, setAppState, setUser }) {
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
           .row { margin-bottom: 30px; } .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
-          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
-          .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
+          
+          /* TOUCH ZOOM HOVER & ACTIVE */
+          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease; }
+          .row-poster:hover, .row-poster:active { transform: scale(1.15); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); border: 2px solid #E50914;}
           
           .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
           .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
@@ -566,6 +562,7 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: 0.2s; }
           .showcase-close-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
           
+          /* FIXED: Showcase perfectly left aligned */
           .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; max-width: 650px; }
           .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0 !important; padding: 0 !important; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
           .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin: 0 0 12px 0 !important; padding: 0 !important; }
@@ -591,9 +588,12 @@ function MovieApp({ user, setAppState, setUser }) {
 
           /* 🔥 FIXED: FLOATING PLAYER & SERVER TABS 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
-          .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
-          /* Moved the overlay to the bottom right */
+          /* IMPORTANT: Disable pointer events on the iframe wrapper itself to avoid Vidsrc stealing clicks on the edges */
+          .player-iframe-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 9998; }
+          .player-iframe { width: 100%; height: 100%; border: none; background-color: #000; pointer-events: auto; }
+          
+          /* Overlay layer specifically to capture back button actions effectively */
           .player-controls-overlay {
             position: absolute; bottom: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
@@ -608,14 +608,21 @@ function MovieApp({ user, setAppState, setUser }) {
           .close-player-btn, .fullscreen-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .close-player-btn:hover, .fullscreen-btn:hover { background: #E50914; transform: scale(1.1); }
 
+          /* 🔥 MOBILE SPECIFIC OPTIMIZATIONS 🔥 */
           @media screen and (max-width: 768px) {
-            .showcase-body { padding-top: 25vh !important; }
-            .showcase-huge-title { font-size: 2rem !important; margin-bottom: 5px !important;}
-            .showcase-tagline { font-size: 0.8rem !important; margin-bottom: 8px !important; }
-            .showcase-metadata { font-size: 0.75rem !important; gap: 8px !important; margin-bottom: 10px !important; }
-            .showcase-overview { font-size: 0.85rem !important; -webkit-line-clamp: 3 !important; }
-            .btn-red-play, .btn-gray-download { padding: 8px 20px !important; font-size: 0.9rem !important; }
-            .showcase-card { width: 95px !important; height: 140px !important; }
+            /* Reduce showcase text size */
+            .showcase-huge-title { font-size: 1.8rem !important; margin-bottom: 5px !important;}
+            .showcase-tagline { font-size: 0.8rem !important; margin-bottom: 5px !important; }
+            .showcase-metadata { font-size: 0.75rem !important; gap: 8px !important; margin-bottom: 8px !important; }
+            .showcase-overview { font-size: 0.85rem !important; -webkit-line-clamp: 2 !important; margin-bottom: 12px !important; }
+            .btn-red-play, .btn-gray-download { padding: 6px 15px !important; font-size: 0.85rem !important; }
+            
+            /* Move "More Like This" UP to fit on screen */
+            .showcase-body { padding: 0.5rem 1.5rem !important; justify-content: flex-start !important; margin-top: 30vh; }
+            .showcase-bottom-carousel { padding: 0.5rem 1.5rem 1rem 1.5rem !important; margin-top: -10px; }
+            .showcase-carousel-title { font-size: 0.95rem !important; }
+            .showcase-card { width: 85px !important; height: 125px !important; }
+            
             /* Make controls smaller on mobile */
             .player-controls-overlay { bottom: 10px; right: 10px; padding: 6px 10px; gap: 10px; }
             .server-btn { padding: 4px 8px; font-size: 0.75rem; }
@@ -760,7 +767,10 @@ function MovieApp({ user, setAppState, setUser }) {
 
       {playingVideo && (
         <div className="fullscreen-player" id="video-player-wrapper">
-          <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
+          {/* 🔥 Vidsrc iframe wrapped to prevent external ad-clicks breaking our app 🔥 */}
+          <div className="player-iframe-wrapper">
+            <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
+          </div>
 
           <div className="player-controls-overlay">
             <div className="server-selector">
@@ -771,7 +781,6 @@ function MovieApp({ user, setAppState, setUser }) {
             </div>
             <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
             
-            {/* 🔥 FULLSCREEN BUTTON 🔥 */}
             <button className="fullscreen-btn" onClick={toggleFullScreen} style={{ marginRight: '5px' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
