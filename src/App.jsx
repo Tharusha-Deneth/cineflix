@@ -331,7 +331,11 @@ function MovieApp({ user, setAppState, setUser }) {
     fetchGridData();
   }, [activeTab]);
 
+  // Handle movie selection + Add click logic
   const openSingleMovie = async (movie) => {
+    // 🔥 Fire ad when a movie poster is clicked 🔥
+    triggerSmartAds();
+
     const type = movie.media_type || (movie.first_air_date ? 'tv' : 'movie');
     setSelectedMovie({ ...movie, media_type: type });
     setSingleTrailerKey("");
@@ -377,7 +381,6 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const handleWatchClick = (movie) => {
     triggerSmartAds(); 
-    // Always play the video immediately, even if a new tab was opened for ads
     setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
   };
 
@@ -402,7 +405,6 @@ function MovieApp({ user, setAppState, setUser }) {
           await elem.msRequestFullscreen();
         }
         
-        // Force Landscape orientation on mobile when entering fullscreen
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile && screen.orientation && screen.orientation.lock) {
           try {
@@ -421,14 +423,12 @@ function MovieApp({ user, setAppState, setUser }) {
         document.webkitExitFullscreen();
       }
       
-      // Unlock orientation when exiting fullscreen
       if (screen.orientation && screen.orientation.unlock) {
         screen.orientation.unlock();
       }
     }
   };
 
-  // Ensure orientation unlocks if the player is closed completely
   const closePlayer = () => {
     if (document.fullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen();
@@ -472,9 +472,9 @@ function MovieApp({ user, setAppState, setUser }) {
           .row { margin-bottom: 30px; } .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
           
-          /* TOUCH ZOOM HOVER & ACTIVE */
+          /* 🔥 TOUCH ZOOM HOVER & ACTIVE (NO RED BORDER) 🔥 */
           .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease; }
-          .row-poster:hover, .row-poster:active { transform: scale(1.15); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); border: 2px solid #E50914;}
+          .row-poster:hover, .row-poster:active { transform: scale(1.15); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95); }
           
           .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
           .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
@@ -495,7 +495,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: 0.2s; }
           .showcase-close-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
           
-          /* FIXED: Showcase perfectly left aligned */
           .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; max-width: 650px; }
           .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0 !important; padding: 0 !important; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
           .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin: 0 0 12px 0 !important; padding: 0 !important; }
@@ -519,11 +518,9 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
-          /* 🔥 FIXED: FLOATING PLAYER & SERVER TABS 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
-          /* Moved the overlay to the top right */
           .player-controls-overlay {
             position: absolute; top: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
