@@ -23,9 +23,8 @@ const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
-// 🚀 SMART AD LOGIC (Mobile Return & Desktop Limits) 🚀
-const triggerSmartAds = (movie, action) => {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+// 🚀 ADS LOGIC (Opens in NEW TAB - 100% Safe for Mobile Back Button) 🚀
+const triggerSmartAds = () => {
   const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
   const now = new Date().getTime();
   
@@ -34,20 +33,17 @@ const triggerSmartAds = (movie, action) => {
 
   if (canShowAd) {
     localStorage.setItem('cineflix_last_ad_time', now.toString());
-
-    if (isMobile) {
-      sessionStorage.setItem('cineflix_saved_movie', JSON.stringify(movie));
-      sessionStorage.setItem('cineflix_pending_action', action);
-      window.location.href = ADSTERRA_DIRECT_LINK;
-      return true; 
-    } else {
-      const windowName = 'adWindow' + Math.random();
-      const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
-      if (pop) pop.blur();
-      window.focus();
+    
+    // Open Ad in a new tab securely (Works for both Mobile & Desktop)
+    const windowName = 'adWindow' + Math.random();
+    const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
+    
+    // Attempt to keep focus on the main movie window so video plays seamlessly
+    if (pop) {
+      pop.blur();
     }
+    window.focus();
   }
-  return false; 
 };
 
 const getInitialState = () => {
@@ -66,38 +62,6 @@ export default function App() {
     const savedUser = localStorage.getItem('cineflix_current_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [hasAdBlock, setHasAdBlock] = useState(false);
-
-  useEffect(() => {
-    const isReturning = sessionStorage.getItem('returning_from_ad');
-    if (isReturning) {
-      sessionStorage.removeItem('returning_from_ad');
-      const savedUser = localStorage.getItem('cineflix_current_user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        setAppState('home');
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const detectAdBlock = () => {
-      const adTest = document.createElement('div');
-      adTest.innerHTML = '&nbsp;';
-      adTest.className = 'adsbox ad-placement doubleclick ad-placeholder';
-      adTest.style.position = 'absolute';
-      adTest.style.top = '-9999px';
-      adTest.style.height = '10px';
-      document.body.appendChild(adTest);
-
-      setTimeout(() => {
-        const isBlocked = adTest.offsetHeight === 0 || window.getComputedStyle(adTest).display === 'none';
-        if (isBlocked) setHasAdBlock(true);
-        adTest.remove();
-      }, 500);
-    };
-    detectAdBlock();
-  }, []);
 
   useEffect(() => {
     if (appState === 'splash') {
@@ -105,19 +69,6 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [appState]);
-
-  if (hasAdBlock) {
-    return (
-      <div style={{ width: '100vw', height: '100vh', backgroundColor: '#0b0b0b', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', textAlign: 'center', zIndex: 999999 }}>
-        <div style={{ backgroundColor: '#181818', padding: '40px', borderRadius: '20px', boxShadow: '0 15px 50px rgba(229,9,20,0.3)', maxWidth: '500px' }}>
-          <svg style={{ width: '80px', fill: '#E50914', marginBottom: '20px' }} viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" /></svg>
-          <h1 style={{ color: '#fff', fontSize: '2rem', fontFamily: "'Unbounded', sans-serif", marginBottom: '15px' }}>AdBlock Detected!</h1>
-          <p style={{ color: '#b3b3b3', fontSize: '1rem', lineHeight: '1.6', marginBottom: '30px', fontFamily: "'Montserrat', sans-serif" }}>We use ads to keep Cineflix free for everyone. Please <b>disable your AdBlocker</b> or whitelist our site.</p>
-          <button onClick={() => window.location.reload()} style={{ backgroundColor: '#E50914', color: '#fff', padding: '15px 30px', borderRadius: '8px', border: 'none', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', fontFamily: "'Montserrat', sans-serif" }}>I have disabled it, Reload Page</button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -211,12 +162,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      console.error(error);
-      if (error.code === 'auth/popup-closed-by-user') {
-        setErrorMsg("Sign-in popup was closed before completing.");
-      } else {
-        setErrorMsg("Error: " + error.message);
-      }
+      setErrorMsg("Sign-in failed or cancelled.");
     } finally { setLoading(false); }
   };
 
@@ -328,24 +274,6 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
-  // 🚀 RESTORE STATE AFTER MOBILE AD RETURN 🚀
-  useEffect(() => {
-    const savedMovieStr = sessionStorage.getItem('cineflix_saved_movie');
-    const pendingAction = sessionStorage.getItem('cineflix_pending_action');
-
-    if (savedMovieStr) {
-      try {
-        const movie = JSON.parse(savedMovieStr);
-        openSingleMovie(movie); 
-        if (pendingAction === 'play') {
-          setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
-        }
-      } catch (e) { }
-      sessionStorage.removeItem('cineflix_saved_movie');
-      sessionStorage.removeItem('cineflix_pending_action');
-    }
-  }, []);
-
   useEffect(() => {
     if (activeTab !== 'home') return;
     const fetchHomeData = async () => {
@@ -448,18 +376,15 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   const handleWatchClick = (movie) => {
-    const redirected = triggerSmartAds(movie, 'play');
-    if (!redirected) {
-      setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
-    }
+    triggerSmartAds(); 
+    // Always play the video immediately, even if a new tab was opened for ads
+    setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    const redirected = triggerSmartAds(movie, 'download');
-    if (!redirected) {
-      window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
-    }
+    triggerSmartAds(); 
+    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
   };
 
   // 🔥 FULL SCREEN VIDEO LOGIC WITH ORIENTATION LOCK 🔥
@@ -503,6 +428,7 @@ function MovieApp({ user, setAppState, setUser }) {
     }
   };
 
+  // Ensure orientation unlocks if the player is closed completely
   const closePlayer = () => {
     if (document.fullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen();
@@ -519,6 +445,8 @@ function MovieApp({ user, setAppState, setUser }) {
       <style>
         {`
           .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
+          
+          /* PERFECT LEFT ALIGNMENT */
           .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
           .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin: 0 0 4px 0 !important; padding: 0 !important; text-transform: uppercase; letter-spacing: 1px; }
           .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0 !important; padding: 0 !important; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
@@ -589,15 +517,15 @@ function MovieApp({ user, setAppState, setUser }) {
           .arrow-btn:hover { background: #E50914; border-color: #E50914; }
           .showcase-cards-scroll { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch; } .showcase-cards-scroll::-webkit-scrollbar { display: none; }
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
-          .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
+          .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
           /* 🔥 FIXED: FLOATING PLAYER & SERVER TABS 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
-          /* Moved the overlay to the bottom right */
+          /* Moved the overlay to the top right */
           .player-controls-overlay {
-            position: absolute; bottom: 20px; right: 20px; z-index: 10000;
+            position: absolute; top: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
             background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
             padding: 8px 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
@@ -610,23 +538,16 @@ function MovieApp({ user, setAppState, setUser }) {
           .close-player-btn, .fullscreen-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .close-player-btn:hover, .fullscreen-btn:hover { background: #E50914; transform: scale(1.1); }
 
-          /* 🔥 MOBILE SPECIFIC OPTIMIZATIONS 🔥 */
           @media screen and (max-width: 768px) {
-            /* Reduce showcase text size */
-            .showcase-huge-title { font-size: 1.8rem !important; margin-bottom: 5px !important;}
-            .showcase-tagline { font-size: 0.8rem !important; margin-bottom: 5px !important; }
-            .showcase-metadata { font-size: 0.75rem !important; gap: 8px !important; margin-bottom: 8px !important; }
-            .showcase-overview { font-size: 0.85rem !important; -webkit-line-clamp: 2 !important; margin-bottom: 12px !important; }
-            .btn-red-play, .btn-gray-download { padding: 6px 15px !important; font-size: 0.85rem !important; }
-            
-            /* Move "More Like This" UP to fit on screen */
-            .showcase-body { padding: 0.5rem 1.5rem !important; justify-content: flex-start !important; margin-top: 30vh; }
-            .showcase-bottom-carousel { padding: 0.5rem 1.5rem 1rem 1.5rem !important; margin-top: -10px; }
-            .showcase-carousel-title { font-size: 0.95rem !important; }
-            .showcase-card { width: 85px !important; height: 125px !important; }
-            
+            .showcase-body { padding-top: 25vh !important; }
+            .showcase-huge-title { font-size: 2rem !important; margin-bottom: 5px !important;}
+            .showcase-tagline { font-size: 0.8rem !important; margin-bottom: 8px !important; }
+            .showcase-metadata { font-size: 0.75rem !important; gap: 8px !important; margin-bottom: 10px !important; }
+            .showcase-overview { font-size: 0.85rem !important; -webkit-line-clamp: 3 !important; }
+            .btn-red-play, .btn-gray-download { padding: 8px 20px !important; font-size: 0.9rem !important; }
+            .showcase-card { width: 95px !important; height: 140px !important; }
             /* Make controls smaller on mobile */
-            .player-controls-overlay { bottom: 10px; right: 10px; padding: 6px 10px; gap: 10px; }
+            .player-controls-overlay { top: 10px; right: 10px; padding: 6px 10px; gap: 10px; }
             .server-btn { padding: 4px 8px; font-size: 0.75rem; }
             .close-player-btn, .fullscreen-btn { width: 30px; height: 30px; font-size: 16px; }
           }
