@@ -211,7 +211,12 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      setErrorMsg("Sign-in failed or cancelled.");
+      console.error(error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        setErrorMsg("Sign-in popup was closed before completing.");
+      } else {
+        setErrorMsg("Error: " + error.message);
+      }
     } finally { setLoading(false); }
   };
 
@@ -457,18 +462,57 @@ function MovieApp({ user, setAppState, setUser }) {
     }
   };
 
-  // 🔥 FULL SCREEN VIDEO LOGIC 🔥
-  const toggleFullScreen = () => {
+  // 🔥 FULL SCREEN VIDEO LOGIC WITH ORIENTATION LOCK 🔥
+  const toggleFullScreen = async () => {
     const elem = document.getElementById("video-player-wrapper");
     if (!elem) return;
+
     if (!document.fullscreenElement) {
-      if (elem.requestFullscreen) elem.requestFullscreen();
-      else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
-      else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+      try {
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          await elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          await elem.msRequestFullscreen();
+        }
+        
+        // Force Landscape orientation on mobile when entering fullscreen
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile && screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock("landscape");
+          } catch (err) {
+            console.log("Orientation lock failed or not supported:", err);
+          }
+        }
+      } catch (err) {
+        console.log("Error attempting to enable full-screen mode:", err.message);
+      }
     } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+      
+      // Unlock orientation when exiting fullscreen
+      if (screen.orientation && screen.orientation.unlock) {
+        screen.orientation.unlock();
+      }
+    }
+  };
+
+  // Ensure orientation unlocks if the player is closed completely
+  const closePlayer = () => {
+    if (document.fullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen();
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
+    setPlayingVideo(null);
   };
 
   return (
@@ -500,10 +544,8 @@ function MovieApp({ user, setAppState, setUser }) {
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
           .row { margin-bottom: 30px; } .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
-          
-          /* TOUCH ZOOM HOVER & ACTIVE */
-          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease; }
-          .row-poster:hover, .row-poster:active { transform: scale(1.15); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); border: 2px solid #E50914;}
+          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
+          .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
           
           .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
           .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
@@ -544,15 +586,16 @@ function MovieApp({ user, setAppState, setUser }) {
           .arrow-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); color: white; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .arrow-btn:hover { background: #E50914; border-color: #E50914; }
           .showcase-cards-scroll { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch; } .showcase-cards-scroll::-webkit-scrollbar { display: none; }
-          
-          .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
-          .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
+          .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
+          .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
+          /* 🔥 FIXED: FLOATING PLAYER & SERVER TABS 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
+          /* Moved the overlay to the bottom right */
           .player-controls-overlay {
-            position: absolute; top: 20px; right: 20px; z-index: 10000;
+            position: absolute; bottom: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
             background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
             padding: 8px 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
@@ -565,7 +608,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .close-player-btn, .fullscreen-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .close-player-btn:hover, .fullscreen-btn:hover { background: #E50914; transform: scale(1.1); }
 
-          /* 🔥 MOBILE SPECIFIC OPTIMIZATIONS (Shrinks Text & Fits Everything nicely) 🔥 */
           @media screen and (max-width: 768px) {
             .showcase-body { padding-top: 25vh !important; }
             .showcase-huge-title { font-size: 2rem !important; margin-bottom: 5px !important;}
@@ -574,6 +616,10 @@ function MovieApp({ user, setAppState, setUser }) {
             .showcase-overview { font-size: 0.85rem !important; -webkit-line-clamp: 3 !important; }
             .btn-red-play, .btn-gray-download { padding: 8px 20px !important; font-size: 0.9rem !important; }
             .showcase-card { width: 95px !important; height: 140px !important; }
+            /* Make controls smaller on mobile */
+            .player-controls-overlay { bottom: 10px; right: 10px; padding: 6px 10px; gap: 10px; }
+            .server-btn { padding: 4px 8px; font-size: 0.75rem; }
+            .close-player-btn, .fullscreen-btn { width: 30px; height: 30px; font-size: 16px; }
           }
 
           @media screen and (min-width: 900px) {
@@ -732,7 +778,7 @@ function MovieApp({ user, setAppState, setUser }) {
               </svg>
             </button>
             
-            <button className="close-player-btn" onClick={() => setPlayingVideo(null)}>✕</button>
+            <button className="close-player-btn" onClick={closePlayer}>✕</button>
           </div>
         </div>
       )}
