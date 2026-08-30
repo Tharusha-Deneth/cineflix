@@ -23,60 +23,53 @@ const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
-// 🚀 MOBILE OPTIMIZED AD LOGIC 🚀
-const triggerSmartAds = (callback) => {
+// 🚀 SMART AD LOGIC (Mobile Return & Desktop Limits) 🚀
+const triggerSmartAds = (movie, action) => {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  
   const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
   const now = new Date().getTime();
-  const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 1800000; // 30 minutes
+  
+  // පැය 1ක් (මිලි තත්පර 3600000) යනකම් ආයේ Ads එන්නේ නෑ
+  const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
 
   if (canShowAd) {
-    localStorage.setItem('cineflix_last_ad_time', now.toString()); // Update timestamp immediately
+    localStorage.setItem('cineflix_last_ad_time', now.toString());
 
     if (isMobile) {
-      // MOBILE: Redirect in the same tab so 'Back' works naturally without reloading the app state.
-      // We set a flag in sessionStorage so we know they are coming back from an ad.
-      sessionStorage.setItem('returning_from_ad', 'true');
+      // Mobile: ඒ Tab එකේම Ad එකට යනවා. Back එද්දී හරියටම හිටපු තැනටම එන්න දත්ත Save කරනවා.
+      sessionStorage.setItem('cineflix_saved_movie', JSON.stringify(movie));
+      sessionStorage.setItem('cineflix_pending_action', action);
       window.location.href = ADSTERRA_DIRECT_LINK;
-      return true; // Indicates an ad was shown and redirected
+      return true; // Redirected
     } else {
-      // DESKTOP: Open 2 pop-under tabs securely
-      const windowName1 = 'adWindow' + Math.random();
-      const windowName2 = 'adWindow' + Math.random();
-      
-      const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
-      const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
-
-      if (pop1) pop1.blur();
-      if (pop2) pop2.blur();
+      // Desktop: එක Pop-under එකක් විතරක් දානවා (කරදර අඩු කරන්න)
+      const windowName = 'adWindow' + Math.random();
+      const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
+      if (pop) pop.blur();
       window.focus();
     }
   }
-  
-  // If no redirection happened, execute the normal action (like playing the video)
-  if (callback) callback();
-  return false;
+  return false; // Did not redirect, can continue normal action
+};
+
+// බ්‍රවුසරය Reload වුණොත් Splash Screen එක මගහැර කෙලින්ම Home එකට යන්න Logic එක
+const getInitialState = () => {
+  const savedUser = localStorage.getItem('cineflix_current_user');
+  const loginTime = localStorage.getItem('cineflix_login_time');
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  if (savedUser && loginTime && (new Date().getTime() - parseInt(loginTime, 10) < SEVEN_DAYS)) {
+    return 'home'; 
+  }
+  return 'splash';
 };
 
 export default function App() {
-  const [appState, setAppState] = useState('splash');
-  const [user, setUser] = useState(null);
+  const [appState, setAppState] = useState(getInitialState());
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('cineflix_current_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [hasAdBlock, setHasAdBlock] = useState(false);
-
-  // Handle returning from mobile ad correctly
-  useEffect(() => {
-    const isReturning = sessionStorage.getItem('returning_from_ad');
-    if (isReturning) {
-      sessionStorage.removeItem('returning_from_ad');
-      // Force skip splash screen and go directly to home if they were already logged in
-      const savedUser = localStorage.getItem('cineflix_current_user');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        setAppState('home');
-      }
-    }
-  }, []);
 
   // 🛡️ ADBLOCK DETECTOR 🛡️
   useEffect(() => {
@@ -97,60 +90,25 @@ export default function App() {
         adTest.remove();
       }, 500);
     };
-
     detectAdBlock();
   }, []);
 
+  // Splash Screen Timer (Only if state is actually splash)
   useEffect(() => {
-    if (appState !== 'splash') return; // Don't run this logic if we are already in home/login (e.g. from Ad return)
-
-    const savedUser = localStorage.getItem('cineflix_current_user');
-    const loginTime = localStorage.getItem('cineflix_login_time');
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-
-    let nextState = 'login';
-    if (savedUser && loginTime) {
-      const now = new Date().getTime();
-      if (now - parseInt(loginTime, 10) < SEVEN_DAYS) {
-        setUser(JSON.parse(savedUser));
-        nextState = 'home';
-      } else {
-        localStorage.removeItem('cineflix_current_user');
-        localStorage.removeItem('cineflix_login_time');
-      }
+    if (appState === 'splash') {
+      const timer = setTimeout(() => setAppState('login'), 7000);
+      return () => clearTimeout(timer);
     }
-
-    const timer = setTimeout(() => setAppState(nextState), 7000);
-    return () => clearTimeout(timer);
   }, [appState]);
 
-  // IF ADBLOCK IS DETECTED, SHOW WARNING AND BLOCK SITE
   if (hasAdBlock) {
     return (
-      <div style={{
-        width: '100vw', height: '100vh', backgroundColor: '#0b0b0b', display: 'flex',
-        justifyContent: 'center', alignItems: 'center', padding: '20px', textAlign: 'center', zIndex: 999999
-      }}>
-        <div style={{
-          backgroundColor: '#181818', padding: '40px', borderRadius: '20px',
-          boxShadow: '0 15px 50px rgba(229,9,20,0.3)', maxWidth: '500px'
-        }}>
-          <svg style={{ width: '80px', fill: '#E50914', marginBottom: '20px' }} viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-          </svg>
+      <div style={{ width: '100vw', height: '100vh', backgroundColor: '#0b0b0b', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', textAlign: 'center', zIndex: 999999 }}>
+        <div style={{ backgroundColor: '#181818', padding: '40px', borderRadius: '20px', boxShadow: '0 15px 50px rgba(229,9,20,0.3)', maxWidth: '500px' }}>
+          <svg style={{ width: '80px', fill: '#E50914', marginBottom: '20px' }} viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" /></svg>
           <h1 style={{ color: '#fff', fontSize: '2rem', fontFamily: "'Unbounded', sans-serif", marginBottom: '15px' }}>AdBlock Detected!</h1>
-          <p style={{ color: '#b3b3b3', fontSize: '1rem', lineHeight: '1.6', marginBottom: '30px', fontFamily: "'Montserrat', sans-serif" }}>
-            We use ads to keep Cineflix free for everyone. Please <b>disable your AdBlocker</b> or whitelist our site to continue watching unlimited movies and TV shows.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              backgroundColor: '#E50914', color: '#fff', padding: '15px 30px', borderRadius: '8px',
-              border: 'none', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', fontFamily: "'Montserrat', sans-serif"
-            }}
-          >
-            I have disabled it, Reload Page
-          </button>
+          <p style={{ color: '#b3b3b3', fontSize: '1rem', lineHeight: '1.6', marginBottom: '30px', fontFamily: "'Montserrat', sans-serif" }}>We use ads to keep Cineflix free for everyone. Please <b>disable your AdBlocker</b> or whitelist our site.</p>
+          <button onClick={() => window.location.reload()} style={{ backgroundColor: '#E50914', color: '#fff', padding: '15px 30px', borderRadius: '8px', border: 'none', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', fontFamily: "'Montserrat', sans-serif" }}>I have disabled it, Reload Page</button>
         </div>
       </div>
     );
@@ -161,19 +119,9 @@ export default function App() {
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Unbounded:wght@700;900&family=Bebas+Neue&display=swap');
-          html, body, #root {
-            margin: 0 !important; padding: 0 !important;
-            width: 100vw !important; max-width: 100vw !important;
-            overflow-x: hidden !important; font-family: 'Montserrat', sans-serif;
-            background-color: #0b0b0b; color: #ffffff; -webkit-tap-highlight-color: transparent;
-          }
+          html, body, #root { margin: 0 !important; padding: 0 !important; width: 100vw !important; max-width: 100vw !important; overflow-x: hidden !important; font-family: 'Montserrat', sans-serif; background-color: #0b0b0b; color: #ffffff; -webkit-tap-highlight-color: transparent; }
           * { box-sizing: border-box; }
-
-          /* Netlify Badge Remover */
-          #netlify-badge, netlify-toolbar, iframe[title*="Netlify"], a[href^="https://www.netlify.com"] {
-            display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
-            width: 0 !important; height: 0 !important;
-          }
+          #netlify-badge, netlify-toolbar, iframe[title*="Netlify"], a[href^="https://www.netlify.com"] { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; }
         `}
       </style>
       {appState === 'splash' && <SplashScreen />}
@@ -192,16 +140,7 @@ function SplashScreen() {
           .splash-container { width: 100vw; height: 100vh; background-color: #000; display: flex; justify-content: center; align-items: center; perspective: 1000px; overflow: hidden; }
           .splash-title { display: flex; font-size: clamp(2.5rem, 8vw, 6rem); font-weight: 900; font-family: 'Unbounded', sans-serif; letter-spacing: clamp(4px, 1.5vw, 12px); transform-style: preserve-3d; }
           .cinematic-letter { display: inline-block; opacity: 0; color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.4); animation: cinematicSequence 6s forwards ease-in-out; }
-          @keyframes cinematicSequence {
-            0% { opacity: 0; transform: translateZ(-300px) scale(0.5); }
-            15% { opacity: 1; transform: translateZ(0) scale(1); color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); }
-            30% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); }
-            40% { color: #ffffff; transform: translateZ(50px) scale(1.1); text-shadow: 0 0 20px #ffffff, 0 0 40px #E50914, 0 0 60px #E50914; }
-            50% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); }
-            70% { opacity: 1; transform: translateY(0) rotate(0deg); filter: blur(0); }
-            90% { opacity: 0; transform: translateY(150px) rotate(25deg) scale(0.8); filter: blur(12px); }
-            100% { opacity: 0; transform: translateY(200px); }
-          }
+          @keyframes cinematicSequence { 0% { opacity: 0; transform: translateZ(-300px) scale(0.5); } 15% { opacity: 1; transform: translateZ(0) scale(1); color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 30% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 40% { color: #ffffff; transform: translateZ(50px) scale(1.1); text-shadow: 0 0 20px #ffffff, 0 0 40px #E50914, 0 0 60px #E50914; } 50% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 70% { opacity: 1; transform: translateY(0) rotate(0deg); filter: blur(0); } 90% { opacity: 0; transform: translateY(150px) rotate(25deg) scale(0.8); filter: blur(12px); } 100% { opacity: 0; transform: translateY(200px); } }
         `}
       </style>
       <div className="splash-title">
@@ -267,12 +206,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      console.error(error);
-      if (error.code === 'auth/popup-closed-by-user') {
-        setErrorMsg("Sign-in popup was closed before completing.");
-      } else {
-        setErrorMsg("Error: " + error.message);
-      }
+      setErrorMsg("Sign-in failed or cancelled.");
     } finally { setLoading(false); }
   };
 
@@ -309,7 +243,6 @@ function AuthScreen({ appState, setAppState, setUser }) {
             .login__swiper-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; z-index: 1; transition: opacity 1.2s ease-in-out; } .login__swiper-img.active { opacity: 1; z-index: 2; }
             .slider-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%); z-index: 3; }
             .login__swiper-data { position: absolute; z-index: 10; color: #fff; left: 2.5rem; bottom: 3.5rem; } .login__swiper-subtitle { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 2px; text-transform: uppercase; color: #E50914; } .login__swiper-title { font-size: 1.6rem; font-family: "Unbounded", sans-serif; line-height: 1.3; text-shadow: 2px 2px 8px rgba(0,0,0,0.9); }
-            .swiper-pagination { position: absolute; bottom: 3.5rem; right: 3.5rem; z-index: 10; display: flex; gap: 8px; } .swiper-pagination-bullet { width: 8px; height: 8px; background-color: rgba(255,255,255,0.4); border-radius: 50%; transition: 0.4s; } .swiper-pagination-bullet.active { opacity: 1; transform: scale(1.3); background-color: #E50914; width: 20px; border-radius: 4px; }
           }
         `}
       </style>
@@ -382,20 +315,25 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
-
   const carouselRef = useRef(null);
 
-  // Global Desktop Click Ad (Unchanged)
+  // 🚀 RESTORE STATE AFTER MOBILE AD RETURN 🚀
   useEffect(() => {
-    const handleGlobalClick = () => {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (!isMobile && !sessionStorage.getItem('first_click_ad_triggered')) {
-        triggerSmartAds();
-        sessionStorage.setItem('first_click_ad_triggered', 'true');
-      }
-    };
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+    const savedMovieStr = sessionStorage.getItem('cineflix_saved_movie');
+    const pendingAction = sessionStorage.getItem('cineflix_pending_action');
+
+    if (savedMovieStr) {
+      try {
+        const movie = JSON.parse(savedMovieStr);
+        openSingleMovie(movie); 
+        // Automatically start playing the video since they returned from the ad
+        if (pendingAction === 'play') {
+          setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+        }
+      } catch (e) { }
+      sessionStorage.removeItem('cineflix_saved_movie');
+      sessionStorage.removeItem('cineflix_pending_action');
+    }
   }, []);
 
   useEffect(() => {
@@ -500,26 +438,17 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   const handleWatchClick = (movie) => {
-    // If triggerSmartAds returns true, it means it redirected (Mobile Ad). 
-    // In that case, we don't immediately open the video so it waits for the user to return.
-    const adTriggeredAndRedirected = triggerSmartAds(() => {
-      setPlayingVideo({ id: movie.id, type: movie.media_type });
-    });
-    
-    // Desktop will hit this immediately
-    if (!adTriggeredAndRedirected) {
-      setPlayingVideo({ id: movie.id, type: movie.media_type });
+    const redirected = triggerSmartAds(movie, 'play');
+    if (!redirected) {
+      setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
     }
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    const adTriggeredAndRedirected = triggerSmartAds(() => {
+    const redirected = triggerSmartAds(movie, 'download');
+    if (!redirected) {
       window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
-    });
-
-    if (!adTriggeredAndRedirected) {
-       window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
     }
   };
 
@@ -528,8 +457,6 @@ function MovieApp({ user, setAppState, setUser }) {
       <style>
         {`
           .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
-          
-          /* PERFECT LEFT ALIGNMENT */
           .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
           .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin: 0 0 4px 0 !important; padding: 0 !important; text-transform: uppercase; letter-spacing: 1px; }
           .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0 !important; padding: 0 !important; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
@@ -557,7 +484,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
           .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
           
-          /* LUXURY SEARCH BAR */
           .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
           .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
           .search-input { width: 100%; padding: 18px 25px 18px 55px; background: rgba(30, 30, 30, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50px; color: #fff; font-size: 1.1rem; font-weight: 500; outline: none; backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; font-family: 'Montserrat', sans-serif; }
@@ -577,7 +503,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: 0.2s; }
           .showcase-close-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
           
-          /* FIXED: Showcase perfectly left aligned */
           .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; max-width: 650px; }
           .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0 !important; padding: 0 !important; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
           .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin: 0 0 12px 0 !important; padding: 0 !important; }
@@ -601,7 +526,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
-          /* FLOATING PLAYER & SERVER TABS */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
@@ -758,7 +682,6 @@ function MovieApp({ user, setAppState, setUser }) {
       {playingVideo && (
         <div className="fullscreen-player">
           <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
-
 
           <div className="player-controls-overlay">
             <div className="server-selector">
