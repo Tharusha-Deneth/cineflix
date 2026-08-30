@@ -23,17 +23,35 @@ const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
-// 🚀 Magic Pop-Under Function (Opens 2 background tabs) 🚀
-const triggerPopUnderAds = () => {
-  const windowName1 = 'adWindow' + Math.random();
-  const windowName2 = 'adWindow' + Math.random();
+// 🚀 Magic Pop-Under Function (Smart Device Detection) 🚀
+const triggerSmartAds = () => {
+  // 1. Check if user is on a mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  // 2. Check 30-min interval
+  const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
+  const now = new Date().getTime();
+  const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 1800000;
 
-  const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
-  const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
+  if (canShowAd) {
+    if (!isMobile) {
+      // DESKTOP: Open 2 pop-under tabs securely
+      const windowName1 = 'adWindow' + Math.random();
+      const windowName2 = 'adWindow' + Math.random();
+      
+      const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
+      const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
 
-  if (pop1) pop1.blur();
-  if (pop2) pop2.blur();
-  window.focus();
+      if (pop1) pop1.blur();
+      if (pop2) pop2.blur();
+      window.focus();
+    } else {
+      // MOBILE: No external tabs opened to prevent app reload on 'Back'
+      // Future mobile ad-logic can be placed here if needed
+    }
+    // Update the timestamp so ads won't bother for 30 mins
+    localStorage.setItem('cineflix_last_ad_time', now.toString());
+  }
 };
 
 export default function App() {
@@ -131,6 +149,12 @@ export default function App() {
             background-color: #0b0b0b; color: #ffffff; -webkit-tap-highlight-color: transparent;
           }
           * { box-sizing: border-box; }
+
+          /* Netlify Badge Remover */
+          #netlify-badge, netlify-toolbar, iframe[title*="Netlify"], a[href^="https://www.netlify.com"] {
+            display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
+            width: 0 !important; height: 0 !important;
+          }
         `}
       </style>
       {appState === 'splash' && <SplashScreen />}
@@ -342,6 +366,19 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
+  // Global Home Screen ad setup - ONLY Triggers on Desktop
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (!isMobile && !sessionStorage.getItem('first_click_ad_triggered')) {
+        triggerSmartAds();
+        sessionStorage.setItem('first_click_ad_triggered', 'true');
+      }
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'home') return;
     const fetchHomeData = async () => {
@@ -443,27 +480,15 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
-  // 🔥 Smart 30-Minute Ad Logic 🔥
-  const triggerSmartAds = () => {
-    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
-    const now = new Date().getTime();
-
-    // Check if 30 minutes (1800000 ms) have passed since the last ad
-    if (!lastAdTime || (now - parseInt(lastAdTime)) > 1800000) {
-      triggerPopUnderAds();
-      localStorage.setItem('cineflix_last_ad_time', now.toString()); // Save the new timestamp
-    }
-  };
-
   const handleWatchClick = (movie) => {
-    triggerSmartAds();
-    setPlayingVideo({ id: movie.id, type: movie.media_type });
+    triggerSmartAds(); 
+    setPlayingVideo({ id: movie.id, type: movie.media_type }); 
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    triggerSmartAds();
-    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
+    triggerSmartAds(); 
+    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
   };
 
   return (
@@ -472,7 +497,7 @@ function MovieApp({ user, setAppState, setUser }) {
         {`
           .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
           
-          /* FIXED: Perfectly Left-Aligned Texts */
+          /* PERFECT LEFT ALIGNMENT */
           .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
           .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin: 0 0 4px 0 !important; padding: 0 !important; text-transform: uppercase; letter-spacing: 1px; }
           .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0 !important; padding: 0 !important; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
@@ -500,6 +525,15 @@ function MovieApp({ user, setAppState, setUser }) {
           .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
           .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
           
+          /* LUXURY SEARCH BAR */
+          .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
+          .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
+          .search-input { width: 100%; padding: 18px 25px 18px 55px; background: rgba(30, 30, 30, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50px; color: #fff; font-size: 1.1rem; font-weight: 500; outline: none; backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; font-family: 'Montserrat', sans-serif; }
+          .search-input::placeholder { color: #888; font-weight: 400; }
+          .search-input:focus { border-color: #E50914; background: rgba(40, 40, 40, 0.95); box-shadow: 0 8px 32px rgba(229, 9, 20, 0.25); }
+          .search-icon-inside { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; fill: #888; pointer-events: none; transition: fill 0.3s ease; }
+          .search-input:focus + .search-icon-inside { fill: #E50914; }
+
           .showcase-view { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #0b0b0b; z-index: 500; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; justify-content: space-between; animation: fadeIn 0.4s ease-out; }
           .showcase-bg-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
           .showcase-bg-video { width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.77vh; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0.85; }
@@ -535,7 +569,7 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
-          /* FIXED: Video Player with Floating Elegant UI */
+          /* FLOATING PLAYER & SERVER TABS */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
@@ -560,54 +594,6 @@ function MovieApp({ user, setAppState, setUser }) {
             .main-content { padding-left: 80px; } .page-content { padding: 40px 40px 40px 10px; }
             .banner { height: 85vh; align-items: center; } .banner-fadeLeft { width: 45%; } .banner-fadeBottom { height: 35%; } .banner-contents { margin-left: 20px; padding: 0; } .banner-description { -webkit-line-clamp: 3; font-size: 1.05rem; } .banner-button { font-size: 1.05rem; padding: 10px 28px; } .rows-container { margin-top: -80px; padding-left: 20px; }
           }
-
-          /* 💎 LUXURY SEARCH BAR CSS 💎 */
-          .search-header { 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            margin-top: 20px; 
-            margin-bottom: 40px; 
-            width: 100%; 
-          }
-          .search-input-wrapper { 
-            position: relative; 
-            width: 100%; 
-            max-width: 650px; 
-          }
-          .search-input { 
-            width: 100%; 
-            padding: 18px 25px 18px 55px; 
-            background: rgba(30, 30, 30, 0.8); 
-            border: 1px solid rgba(255, 255, 255, 0.15); 
-            border-radius: 50px; 
-            color: #fff; 
-            font-size: 1.1rem; 
-            font-weight: 500; 
-            outline: none; 
-            backdrop-filter: blur(10px); 
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); 
-            transition: all 0.3s ease; 
-            font-family: 'Montserrat', sans-serif; 
-          }
-          .search-input::placeholder { color: #888; font-weight: 400; }
-          .search-input:focus { 
-            border-color: #E50914; 
-            background: rgba(40, 40, 40, 0.95); 
-            box-shadow: 0 8px 32px rgba(229, 9, 20, 0.25); 
-          }
-          .search-icon-inside { 
-            position: absolute; 
-            left: 20px; 
-            top: 50%; 
-            transform: translateY(-50%); 
-            width: 22px; 
-            height: 22px; 
-            fill: #888; 
-            pointer-events: none; 
-            transition: fill 0.3s ease; 
-          }
-          .search-input:focus + .search-icon-inside { fill: #E50914; }
         `}
       </style>
 
