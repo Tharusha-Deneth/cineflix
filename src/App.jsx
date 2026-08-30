@@ -23,29 +23,11 @@ const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
-// 🚀 ADS LOGIC (Opens in NEW TAB - 100% Safe for Mobile Back Button) 🚀
-const triggerSmartAds = () => {
-  const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
-  const now = new Date().getTime();
-  
-  // පැය 1ක් යනකම් ආයේ Ads එන්නේ නෑ
-  const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
-
-  if (canShowAd) {
-    localStorage.setItem('cineflix_last_ad_time', now.toString());
-    
-    // Open Ad in a new tab securely
-    const windowName = 'adWindow' + Math.random();
-    const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
-    
-    if (pop) {
-      pop.blur();
-    }
-    window.focus();
-  }
-};
-
+// Splash Screen Skip Logic (If returning from Ad)
 const getInitialState = () => {
+  const isReturningFromAd = sessionStorage.getItem('cineflix_restore_state');
+  if (isReturningFromAd) return 'home';
+
   const savedUser = localStorage.getItem('cineflix_current_user');
   const loginTime = localStorage.getItem('cineflix_login_time');
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
@@ -270,8 +252,40 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
+  const [showAdGuide, setShowAdGuide] = useState(false);
 
   const carouselRef = useRef(null);
+
+  // 🚀 RESTORE STATE AFTER AD RETURN 🚀
+  useEffect(() => {
+    // Check if user is opening site for the first time
+    const guideShown = localStorage.getItem('cineflix_ad_guide_shown');
+    if (!guideShown) {
+      setShowAdGuide(true);
+    }
+
+    const savedStateStr = sessionStorage.getItem('cineflix_restore_state');
+    if (savedStateStr) {
+      try {
+        const state = JSON.parse(savedStateStr);
+        setActiveTab(state.activeTab);
+        
+        // Skip ad check and reopen movie directly
+        openSingleMovie(state.selectedMovie, true); 
+        
+        // Auto Play immediately if action was play
+        if (state.action === 'play') {
+          setTimeout(() => {
+            setPlayingVideo({ 
+              id: state.selectedMovie.id, 
+              type: state.selectedMovie.media_type || (state.selectedMovie.first_air_date ? 'tv' : 'movie') 
+            });
+          }, 1000); // slight delay to ensure UI mounts
+        }
+      } catch (e) { }
+      sessionStorage.removeItem('cineflix_restore_state');
+    }
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -330,11 +344,7 @@ function MovieApp({ user, setAppState, setUser }) {
     fetchGridData();
   }, [activeTab]);
 
-  // Handle movie selection + Add click logic
-  const openSingleMovie = async (movie) => {
-    // 🔥 Fire ad when a movie poster is clicked 🔥
-    triggerSmartAds();
-
+  const openSingleMovie = async (movie, skipAd = false) => {
     const type = movie.media_type || (movie.first_air_date ? 'tv' : 'movie');
     setSelectedMovie({ ...movie, media_type: type });
     setSingleTrailerKey("");
@@ -378,15 +388,51 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
+  // 🔥 ACTION BUTTON CLICK HANDLERS (Plays Video + Opens Ads safely in SAME tab) 🔥
   const handleWatchClick = (movie) => {
-    triggerSmartAds(); 
-    setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
+    const now = new Date().getTime();
+    const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
+
+    if (canShowAd) {
+      localStorage.setItem('cineflix_last_ad_time', now.toString());
+      sessionStorage.setItem('cineflix_restore_state', JSON.stringify({
+        activeTab: activeTab,
+        selectedMovie: movie,
+        action: 'play'
+      }));
+      window.location.href = ADSTERRA_DIRECT_LINK; // Redirect in same tab
+    } else {
+      setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+    }
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    triggerSmartAds(); 
-    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
+    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
+    const now = new Date().getTime();
+    const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
+
+    // REAL DOWNLOAD LINK using Google "Index of" trick for true MP4 downloads
+    const movieTitle = encodeURIComponent(movie.title || movie.name);
+    const dlLink = `https://www.google.com/search?q=intitle:"index.of"+(mp4|mkv)+"${movieTitle}"`;
+
+    if (canShowAd) {
+      localStorage.setItem('cineflix_last_ad_time', now.toString());
+      sessionStorage.setItem('cineflix_restore_state', JSON.stringify({
+        activeTab: activeTab,
+        selectedMovie: movie,
+        action: 'download'
+      }));
+      window.location.href = ADSTERRA_DIRECT_LINK; // Redirect in same tab
+    } else {
+      window.open(dlLink, '_blank');
+    }
+  };
+
+  const copyAdGuard = () => {
+    navigator.clipboard.writeText('dns.adguard.com');
+    alert("Copied: dns.adguard.com");
   };
 
   return (
@@ -394,7 +440,6 @@ function MovieApp({ user, setAppState, setUser }) {
       <style>
         {`
           .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
-          
           .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
           .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin: 0 0 4px 0 !important; padding: 0 !important; text-transform: uppercase; letter-spacing: 1px; }
           .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0 !important; padding: 0 !important; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
@@ -466,11 +511,11 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95); }
 
-          /* 🔥 FIXED: Mobile Video Player fits strictly without bleeding/zooming 🔥 */
+          /* 🔥 MOBILE VIDEO PLAYER FIXES 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; justify-content: center; align-items: center; }
           .player-iframe { width: 100%; height: 100%; max-height: 100vh; border: none; z-index: 9999; }
           
-          /* FIXED: Overlay moved to Top Right */
+          /* Overlay in Top Right */
           .player-controls-overlay {
             position: absolute; top: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
@@ -485,6 +530,21 @@ function MovieApp({ user, setAppState, setUser }) {
           .close-player-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .close-player-btn:hover { background: #E50914; transform: scale(1.1); }
 
+          /* 💡 AD GUIDE POPUP STYLES 💡 */
+          .ad-guide-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 999999; display: flex; justify-content: center; align-items: center; padding: 20px; }
+          .ad-guide-box { background: #141414; padding: 30px; border-radius: 20px; border: 1px solid #333; max-width: 500px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+          .ad-guide-box h2 { color: #E50914; font-family: 'Unbounded', sans-serif; font-size: 1.5rem; margin-bottom: 15px; }
+          .ad-guide-box p { color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 20px; }
+          .guide-section { background: #1f1f1f; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+          .guide-section h3 { color: #fff; font-size: 1.1rem; margin-bottom: 8px; }
+          .guide-section p { font-size: 0.85rem; margin-bottom: 10px; color: #aaa; }
+          .copy-box { display: flex; gap: 10px; }
+          .copy-box input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #111; color: #4ade80; font-weight: bold; font-family: monospace; }
+          .copy-box button { background: #E50914; color: #fff; border: none; padding: 0 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+          .copy-box button:hover { background: #c90812; }
+          .got-it-btn { width: 100%; padding: 15px; background: #fff; color: #000; font-weight: bold; font-size: 1.1rem; border: none; border-radius: 8px; margin-top: 10px; cursor: pointer; transition: 0.2s; }
+          .got-it-btn:hover { background: #e5e5e5; transform: scale(1.02); }
+
           @media screen and (max-width: 768px) {
             .showcase-body { padding-top: 25vh !important; }
             .showcase-huge-title { font-size: 2rem !important; margin-bottom: 5px !important;}
@@ -494,16 +554,12 @@ function MovieApp({ user, setAppState, setUser }) {
             .btn-red-play, .btn-gray-download { padding: 8px 20px !important; font-size: 0.9rem !important; }
             .showcase-card { width: 95px !important; height: 140px !important; }
             
-            /* Smaller Top-Right controls for Mobile */
             .player-controls-overlay { top: 10px; right: 10px; padding: 6px 10px; gap: 10px; }
             .server-btn { padding: 4px 8px; font-size: 0.75rem; }
             .close-player-btn { width: 30px; height: 30px; font-size: 16px; }
-            
-            /* Ensures iframe maintains aspect ratio properly without cutting off controls on mobile */
             .player-iframe { height: 56.25vw; max-height: 100vh; }
           }
           
-          /* Landscape Mobile specific */
           @media screen and (max-width: 899px) and (orientation: landscape) {
             .player-iframe { height: 100vh; width: 100vw; }
           }
@@ -517,6 +573,35 @@ function MovieApp({ user, setAppState, setUser }) {
           }
         `}
       </style>
+
+      {/* 💡 AD-FREE GUIDE MODAL (First Time Only) 💡 */}
+      {showAdGuide && (
+        <div className="ad-guide-overlay">
+          <div className="ad-guide-box">
+            <h2>💡 Tip: Watch Without Ads!</h2>
+            <p>Video players contain third-party ads. Here is how to block them forever for the best streaming experience:</p>
+            
+            <div className="guide-section">
+              <h3>📱 For Mobile:</h3>
+              <p>Go to your phone <b>Settings &gt; Connection &amp; Sharing &gt; Private DNS</b> and paste this code:</p>
+              <div className="copy-box">
+                <input type="text" readOnly value="dns.adguard.com" />
+                <button onClick={copyAdGuard}>Copy</button>
+              </div>
+            </div>
+
+            <div className="guide-section">
+              <h3>💻 For PC / Desktop:</h3>
+              <p>Install the <b>uBlock Origin</b> extension on Chrome, Edge or Safari.</p>
+            </div>
+
+            <button className="got-it-btn" onClick={() => {
+              setShowAdGuide(false);
+              localStorage.setItem('cineflix_ad_guide_shown', 'true');
+            }}>Got it, let's watch!</button>
+          </div>
+        </div>
+      )}
 
       <header className="mobile-header">
         <span className="mobile-logo">CINEFLIX</span>
@@ -556,14 +641,14 @@ function MovieApp({ user, setAppState, setUser }) {
                 <h1 className="banner-title">{bannerMovie?.title || bannerMovie?.name || "MONEY HEIST"}</h1>
                 <p className="banner-description">{bannerMovie?.overview}</p>
                 <div className="banner-buttons">
-                  <button className="banner-button play-btn" onClick={() => openSingleMovie(bannerMovie)}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> View Info</button>
+                  <button className="banner-button play-btn" onClick={() => openSingleMovie(bannerMovie, true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> View Info</button>
                 </div>
               </div>
             </header>
             <div className="rows-container">
-              <div className="row"><h2>New this week</h2><div className="row-posters">{trending.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
-              <div className="row"><h2>Netflix Originals</h2><div className="row-posters">{netflixOriginals.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
-              <div className="row"><h2>Top Rated</h2><div className="row-posters">{topRated.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.title} />)}</div></div>
+              <div className="row"><h2>New this week</h2><div className="row-posters">{trending.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
+              <div className="row"><h2>Netflix Originals</h2><div className="row-posters">{netflixOriginals.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
+              <div className="row"><h2>Top Rated</h2><div className="row-posters">{topRated.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.title} />)}</div></div>
             </div>
           </>
         )}
@@ -586,7 +671,7 @@ function MovieApp({ user, setAppState, setUser }) {
             </div>
             <div className="movies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
               {searchResults.map(movie => movie.poster_path && (
-                <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
+                <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
               ))}
             </div>
           </div>
@@ -594,7 +679,7 @@ function MovieApp({ user, setAppState, setUser }) {
         {['tv', 'movies', 'trending'].includes(activeTab) && (
           <div className="page-content">
             <h1 style={{ fontSize: '1.6rem', marginBottom: '20px', fontWeight: 'bold' }}>{activeTab === 'tv' ? 'TV Shows' : activeTab === 'movies' ? 'Movies' : 'Trending Now'}</h1>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{gridData.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{gridData.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
           </div>
         )}
       </main>
@@ -638,7 +723,7 @@ function MovieApp({ user, setAppState, setUser }) {
               </div>
             </div>
             <div className="showcase-cards-scroll" ref={carouselRef}>
-              {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && <img key={m.id} src={`${IMAGE_BASE_URL}${m.poster_path}`} alt={m.title || m.name} className="showcase-card" onClick={() => openSingleMovie(m)} />)}
+              {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && <img key={m.id} src={`${IMAGE_BASE_URL}${m.poster_path}`} alt={m.title || m.name} className="showcase-card" onClick={() => openSingleMovie(m, true)} />)}
             </div>
           </div>
         </div>
@@ -648,7 +733,6 @@ function MovieApp({ user, setAppState, setUser }) {
         <div className="fullscreen-player" id="video-player-wrapper">
           <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
 
-          {/* 🔥 FIXED: Controls moved to Top Right, Fullscreen button removed 🔥 */}
           <div className="player-controls-overlay">
             <div className="server-selector">
               <span style={{ fontSize: '0.85rem', color: '#fff', marginRight: '5px', fontWeight: 'bold' }}>Server:</span>
