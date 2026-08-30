@@ -29,30 +29,27 @@ const triggerSmartAds = (movie, action) => {
   const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
   const now = new Date().getTime();
   
-  // පැය 1ක් (මිලි තත්පර 3600000) යනකම් ආයේ Ads එන්නේ නෑ
+  // පැය 1ක් යනකම් ආයේ Ads එන්නේ නෑ
   const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
 
   if (canShowAd) {
     localStorage.setItem('cineflix_last_ad_time', now.toString());
 
     if (isMobile) {
-      // Mobile: ඒ Tab එකේම Ad එකට යනවා. Back එද්දී හරියටම හිටපු තැනටම එන්න දත්ත Save කරනවා.
       sessionStorage.setItem('cineflix_saved_movie', JSON.stringify(movie));
       sessionStorage.setItem('cineflix_pending_action', action);
       window.location.href = ADSTERRA_DIRECT_LINK;
-      return true; // Redirected
+      return true; 
     } else {
-      // Desktop: එක Pop-under එකක් විතරක් දානවා (කරදර අඩු කරන්න)
       const windowName = 'adWindow' + Math.random();
       const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
       if (pop) pop.blur();
       window.focus();
     }
   }
-  return false; // Did not redirect, can continue normal action
+  return false; 
 };
 
-// බ්‍රවුසරය Reload වුණොත් Splash Screen එක මගහැර කෙලින්ම Home එකට යන්න Logic එක
 const getInitialState = () => {
   const savedUser = localStorage.getItem('cineflix_current_user');
   const loginTime = localStorage.getItem('cineflix_login_time');
@@ -71,7 +68,18 @@ export default function App() {
   });
   const [hasAdBlock, setHasAdBlock] = useState(false);
 
-  // 🛡️ ADBLOCK DETECTOR 🛡️
+  useEffect(() => {
+    const isReturning = sessionStorage.getItem('returning_from_ad');
+    if (isReturning) {
+      sessionStorage.removeItem('returning_from_ad');
+      const savedUser = localStorage.getItem('cineflix_current_user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+        setAppState('home');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const detectAdBlock = () => {
       const adTest = document.createElement('div');
@@ -84,16 +92,13 @@ export default function App() {
 
       setTimeout(() => {
         const isBlocked = adTest.offsetHeight === 0 || window.getComputedStyle(adTest).display === 'none';
-        if (isBlocked) {
-          setHasAdBlock(true);
-        }
+        if (isBlocked) setHasAdBlock(true);
         adTest.remove();
       }, 500);
     };
     detectAdBlock();
   }, []);
 
-  // Splash Screen Timer (Only if state is actually splash)
   useEffect(() => {
     if (appState === 'splash') {
       const timer = setTimeout(() => setAppState('login'), 7000);
@@ -315,6 +320,7 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
+
   const carouselRef = useRef(null);
 
   // 🚀 RESTORE STATE AFTER MOBILE AD RETURN 🚀
@@ -326,7 +332,6 @@ function MovieApp({ user, setAppState, setUser }) {
       try {
         const movie = JSON.parse(savedMovieStr);
         openSingleMovie(movie); 
-        // Automatically start playing the video since they returned from the ad
         if (pendingAction === 'play') {
           setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
         }
@@ -452,6 +457,20 @@ function MovieApp({ user, setAppState, setUser }) {
     }
   };
 
+  // 🔥 FULL SCREEN VIDEO LOGIC 🔥
+  const toggleFullScreen = () => {
+    const elem = document.getElementById("video-player-wrapper");
+    if (!elem) return;
+    if (!document.fullscreenElement) {
+      if (elem.requestFullscreen) elem.requestFullscreen();
+      else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+      else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+  };
+
   return (
     <div className="app-container">
       <style>
@@ -481,8 +500,10 @@ function MovieApp({ user, setAppState, setUser }) {
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
           .row { margin-bottom: 30px; } .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
-          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease; }
-          .row-poster:hover { transform: scale(1.25); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); }
+          
+          /* TOUCH ZOOM HOVER & ACTIVE */
+          .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease; }
+          .row-poster:hover, .row-poster:active { transform: scale(1.15); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.5); border: 2px solid #E50914;}
           
           .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
           .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
@@ -523,8 +544,9 @@ function MovieApp({ user, setAppState, setUser }) {
           .arrow-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); color: white; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .arrow-btn:hover { background: #E50914; border-color: #E50914; }
           .showcase-cards-scroll { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; scroll-behavior: smooth; padding: 20px 0; -webkit-overflow-scrolling: touch; } .showcase-cards-scroll::-webkit-scrollbar { display: none; }
-          .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
-          .showcase-card:hover { transform: scale(1.25); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
+          
+          .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
+          .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
@@ -540,8 +562,19 @@ function MovieApp({ user, setAppState, setUser }) {
           .server-selector { display: flex; gap: 8px; align-items: center; }
           .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 5px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
           .server-btn.active { background: #E50914; border-color: #E50914; box-shadow: 0 0 10px rgba(229, 9, 20, 0.5); }
-          .close-player-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-          .close-player-btn:hover { background: #E50914; transform: scale(1.1); }
+          .close-player-btn, .fullscreen-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+          .close-player-btn:hover, .fullscreen-btn:hover { background: #E50914; transform: scale(1.1); }
+
+          /* 🔥 MOBILE SPECIFIC OPTIMIZATIONS (Shrinks Text & Fits Everything nicely) 🔥 */
+          @media screen and (max-width: 768px) {
+            .showcase-body { padding-top: 25vh !important; }
+            .showcase-huge-title { font-size: 2rem !important; margin-bottom: 5px !important;}
+            .showcase-tagline { font-size: 0.8rem !important; margin-bottom: 8px !important; }
+            .showcase-metadata { font-size: 0.75rem !important; gap: 8px !important; margin-bottom: 10px !important; }
+            .showcase-overview { font-size: 0.85rem !important; -webkit-line-clamp: 3 !important; }
+            .btn-red-play, .btn-gray-download { padding: 8px 20px !important; font-size: 0.9rem !important; }
+            .showcase-card { width: 95px !important; height: 140px !important; }
+          }
 
           @media screen and (min-width: 900px) {
             .app-container { padding-bottom: 0; } .mobile-header, .bottom-nav { display: none; }
@@ -680,7 +713,7 @@ function MovieApp({ user, setAppState, setUser }) {
       )}
 
       {playingVideo && (
-        <div className="fullscreen-player">
+        <div className="fullscreen-player" id="video-player-wrapper">
           <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
 
           <div className="player-controls-overlay">
@@ -691,6 +724,14 @@ function MovieApp({ user, setAppState, setUser }) {
               <button className={`server-btn ${activeServer === 3 ? 'active' : ''}`} onClick={() => setActiveServer(3)}>3</button>
             </div>
             <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
+            
+            {/* 🔥 FULLSCREEN BUTTON 🔥 */}
+            <button className="fullscreen-btn" onClick={toggleFullScreen} style={{ marginRight: '5px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+              </svg>
+            </button>
+            
             <button className="close-player-btn" onClick={() => setPlayingVideo(null)}>✕</button>
           </div>
         </div>
