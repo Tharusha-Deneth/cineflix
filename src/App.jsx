@@ -274,6 +274,38 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
+  // Track Fullscreen status for the whole document to update orientation
+  useEffect(() => {
+    const handleFullscreenChange = async () => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (document.fullscreenElement) {
+        // Entered fullscreen
+        if (isMobile && screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock("landscape");
+          } catch (err) {
+            console.log("Orientation lock failed:", err);
+          }
+        }
+      } else {
+        // Exited fullscreen
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        }
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("msfullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'home') return;
     const fetchHomeData = async () => {
@@ -331,7 +363,6 @@ function MovieApp({ user, setAppState, setUser }) {
     fetchGridData();
   }, [activeTab]);
 
-  // Handle movie selection + Add click logic
   const openSingleMovie = async (movie) => {
     // 🔥 Fire ad when a movie poster is clicked 🔥
     triggerSmartAds();
@@ -390,56 +421,6 @@ function MovieApp({ user, setAppState, setUser }) {
     window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
   };
 
-  // 🔥 FULL SCREEN VIDEO LOGIC WITH ORIENTATION LOCK 🔥
-  const toggleFullScreen = async () => {
-    const elem = document.getElementById("video-player-wrapper");
-    if (!elem) return;
-
-    if (!document.fullscreenElement) {
-      try {
-        if (elem.requestFullscreen) {
-          await elem.requestFullscreen();
-        } else if (elem.webkitRequestFullscreen) {
-          await elem.webkitRequestFullscreen();
-        } else if (elem.msRequestFullscreen) {
-          await elem.msRequestFullscreen();
-        }
-        
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (isMobile && screen.orientation && screen.orientation.lock) {
-          try {
-            await screen.orientation.lock("landscape");
-          } catch (err) {
-            console.log("Orientation lock failed or not supported:", err);
-          }
-        }
-      } catch (err) {
-        console.log("Error attempting to enable full-screen mode:", err.message);
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen();
-      }
-      
-      if (screen.orientation && screen.orientation.unlock) {
-        screen.orientation.unlock();
-      }
-    }
-  };
-
-  const closePlayer = () => {
-    if (document.fullscreenElement) {
-      if (document.exitFullscreen) document.exitFullscreen();
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-    }
-    if (screen.orientation && screen.orientation.unlock) {
-      screen.orientation.unlock();
-    }
-    setPlayingVideo(null);
-  };
-
   return (
     <div className="app-container">
       <style>
@@ -495,6 +476,7 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: 0.2s; }
           .showcase-close-btn:hover { background: #E50914; border-color: #E50914; transform: scale(1.1); }
           
+          /* FIXED: Showcase perfectly left aligned */
           .showcase-body { position: relative; z-index: 10; padding: 1rem 2.5rem; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; max-width: 650px; }
           .showcase-huge-title { font-family: 'Bebas Neue', 'Unbounded', sans-serif; font-size: clamp(3rem, 9vw, 6rem); line-height: 0.95; letter-spacing: 3px; text-transform: uppercase; margin: 0 0 10px 0 !important; padding: 0 !important; text-shadow: 0 4px 20px rgba(0,0,0,0.9); }
           .showcase-tagline { font-size: clamp(0.9rem, 2vw, 1.25rem); font-weight: 800; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; margin: 0 0 12px 0 !important; padding: 0 !important; }
@@ -518,9 +500,11 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95), 0 0 20px rgba(229, 9, 20, 0.6); }
 
+          /* 🔥 FIXED: FLOATING PLAYER & SERVER TABS 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
           .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
+          /* Moved the overlay to the top right */
           .player-controls-overlay {
             position: absolute; top: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
@@ -532,8 +516,8 @@ function MovieApp({ user, setAppState, setUser }) {
           .server-selector { display: flex; gap: 8px; align-items: center; }
           .server-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 5px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
           .server-btn.active { background: #E50914; border-color: #E50914; box-shadow: 0 0 10px rgba(229, 9, 20, 0.5); }
-          .close-player-btn, .fullscreen-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-          .close-player-btn:hover, .fullscreen-btn:hover { background: #E50914; transform: scale(1.1); }
+          .close-player-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+          .close-player-btn:hover { background: #E50914; transform: scale(1.1); }
 
           @media screen and (max-width: 768px) {
             .showcase-body { padding-top: 25vh !important; }
@@ -546,7 +530,7 @@ function MovieApp({ user, setAppState, setUser }) {
             /* Make controls smaller on mobile */
             .player-controls-overlay { top: 10px; right: 10px; padding: 6px 10px; gap: 10px; }
             .server-btn { padding: 4px 8px; font-size: 0.75rem; }
-            .close-player-btn, .fullscreen-btn { width: 30px; height: 30px; font-size: 16px; }
+            .close-player-btn { width: 30px; height: 30px; font-size: 16px; }
           }
 
           @media screen and (min-width: 900px) {
@@ -697,13 +681,6 @@ function MovieApp({ user, setAppState, setUser }) {
               <button className={`server-btn ${activeServer === 3 ? 'active' : ''}`} onClick={() => setActiveServer(3)}>3</button>
             </div>
             <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
-            
-            {/* 🔥 FULLSCREEN BUTTON 🔥 */}
-            <button className="fullscreen-btn" onClick={toggleFullScreen} style={{ marginRight: '5px' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-              </svg>
-            </button>
             
             <button className="close-player-btn" onClick={closePlayer}>✕</button>
           </div>
