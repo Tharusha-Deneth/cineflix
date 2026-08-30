@@ -24,34 +24,30 @@ const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
 // 🚀 SMART AD LOGIC (Mobile Return & Desktop Limits) 🚀
-const triggerSmartAds = () => {
+const triggerSmartAds = (movie, action) => {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
   const now = new Date().getTime();
   
-  // පැය 1ක් (මිලි තත්පර 3600000) යනකම් ආයේ Ads එන්නේ නෑ
+  // පැය 1ක් යනකම් ආයේ Ads එන්නේ නෑ
   const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
 
   if (canShowAd) {
     localStorage.setItem('cineflix_last_ad_time', now.toString());
 
     if (isMobile) {
-      // Mobile: Open Ad in a new tab silently (doesn't force reload current tab)
-      const windowName = 'adWindow' + Math.random();
-      window.open(ADSTERRA_DIRECT_LINK, windowName);
+      sessionStorage.setItem('cineflix_saved_movie', JSON.stringify(movie));
+      sessionStorage.setItem('cineflix_pending_action', action);
+      window.location.href = ADSTERRA_DIRECT_LINK;
+      return true; 
     } else {
-      // Desktop: Open 2 pop-under tabs securely
-      const windowName1 = 'adWindow' + Math.random();
-      const windowName2 = 'adWindow' + Math.random();
-      
-      const pop1 = window.open(ADSTERRA_DIRECT_LINK, windowName1, 'width=800,height=600');
-      const pop2 = window.open(ADSTERRA_DIRECT_LINK, windowName2, 'width=800,height=600');
-
-      if (pop1) pop1.blur();
-      if (pop2) pop2.blur();
+      const windowName = 'adWindow' + Math.random();
+      const pop = window.open(ADSTERRA_DIRECT_LINK, windowName, 'width=800,height=600');
+      if (pop) pop.blur();
       window.focus();
     }
   }
+  return false; 
 };
 
 const getInitialState = () => {
@@ -72,7 +68,18 @@ export default function App() {
   });
   const [hasAdBlock, setHasAdBlock] = useState(false);
 
-  // 🛡️ ADBLOCK DETECTOR 🛡️
+  useEffect(() => {
+    const isReturning = sessionStorage.getItem('returning_from_ad');
+    if (isReturning) {
+      sessionStorage.removeItem('returning_from_ad');
+      const savedUser = localStorage.getItem('cineflix_current_user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+        setAppState('home');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const detectAdBlock = () => {
       const adTest = document.createElement('div');
@@ -85,16 +92,13 @@ export default function App() {
 
       setTimeout(() => {
         const isBlocked = adTest.offsetHeight === 0 || window.getComputedStyle(adTest).display === 'none';
-        if (isBlocked) {
-          setHasAdBlock(true);
-        }
+        if (isBlocked) setHasAdBlock(true);
         adTest.remove();
       }, 500);
     };
     detectAdBlock();
   }, []);
 
-  // Splash Screen Timer
   useEffect(() => {
     if (appState === 'splash') {
       const timer = setTimeout(() => setAppState('login'), 7000);
@@ -207,7 +211,12 @@ function AuthScreen({ appState, setAppState, setUser }) {
       const result = await signInWithPopup(auth, googleProvider);
       saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
     } catch (error) {
-      setErrorMsg("Sign-in failed or cancelled.");
+      console.error(error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        setErrorMsg("Sign-in popup was closed before completing.");
+      } else {
+        setErrorMsg("Error: " + error.message);
+      }
     } finally { setLoading(false); }
   };
 
@@ -319,31 +328,23 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
-  // Handle browser 'back' button explicitly so it doesn't reload the app
+  // 🚀 RESTORE STATE AFTER MOBILE AD RETURN 🚀
   useEffect(() => {
-    const handlePopState = (e) => {
-      // If a video is playing, close video instead of going back
-      if (playingVideo) {
-        e.preventDefault();
-        setPlayingVideo(null);
-        window.history.pushState(null, null, window.location.pathname);
-      } 
-      // If single movie view is open, close it instead of going back
-      else if (selectedMovie) {
-        e.preventDefault();
-        setSelectedMovie(null);
-        window.history.pushState(null, null, window.location.pathname);
-      }
-    };
-    
-    // Push a dummy state to history so we can catch the back button
-    window.history.pushState(null, null, window.location.pathname);
-    window.addEventListener('popstate', handlePopState);
-    
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [playingVideo, selectedMovie]);
+    const savedMovieStr = sessionStorage.getItem('cineflix_saved_movie');
+    const pendingAction = sessionStorage.getItem('cineflix_pending_action');
+
+    if (savedMovieStr) {
+      try {
+        const movie = JSON.parse(savedMovieStr);
+        openSingleMovie(movie); 
+        if (pendingAction === 'play') {
+          setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+        }
+      } catch (e) { }
+      sessionStorage.removeItem('cineflix_saved_movie');
+      sessionStorage.removeItem('cineflix_pending_action');
+    }
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -447,14 +448,18 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   const handleWatchClick = (movie) => {
-    triggerSmartAds(); 
-    setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') }); 
+    const redirected = triggerSmartAds(movie, 'play');
+    if (!redirected) {
+      setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+    }
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    triggerSmartAds(); 
-    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
+    const redirected = triggerSmartAds(movie, 'download');
+    if (!redirected) {
+      window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
+    }
   };
 
   // 🔥 FULL SCREEN VIDEO LOGIC WITH ORIENTATION LOCK 🔥
@@ -588,12 +593,9 @@ function MovieApp({ user, setAppState, setUser }) {
 
           /* 🔥 FIXED: FLOATING PLAYER & SERVER TABS 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; }
+          .player-iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 9999; }
           
-          /* IMPORTANT: Disable pointer events on the iframe wrapper itself to avoid Vidsrc stealing clicks on the edges */
-          .player-iframe-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 9998; }
-          .player-iframe { width: 100%; height: 100%; border: none; background-color: #000; pointer-events: auto; }
-          
-          /* Overlay layer specifically to capture back button actions effectively */
+          /* Moved the overlay to the bottom right */
           .player-controls-overlay {
             position: absolute; bottom: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
@@ -767,10 +769,7 @@ function MovieApp({ user, setAppState, setUser }) {
 
       {playingVideo && (
         <div className="fullscreen-player" id="video-player-wrapper">
-          {/* 🔥 Vidsrc iframe wrapped to prevent external ad-clicks breaking our app 🔥 */}
-          <div className="player-iframe-wrapper">
-            <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
-          </div>
+          <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
 
           <div className="player-controls-overlay">
             <div className="server-selector">
@@ -781,6 +780,7 @@ function MovieApp({ user, setAppState, setUser }) {
             </div>
             <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
             
+            {/* 🔥 FULLSCREEN BUTTON 🔥 */}
             <button className="fullscreen-btn" onClick={toggleFullScreen} style={{ marginRight: '5px' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
