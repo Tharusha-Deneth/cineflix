@@ -23,18 +23,24 @@ const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
-// 🚀 Magic Pop-Under Function (Smart Device Detection) 🚀
-const triggerSmartAds = () => {
-  // 1. Check if user is on a mobile device
+// 🚀 MOBILE OPTIMIZED AD LOGIC 🚀
+const triggerSmartAds = (callback) => {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
-  // 2. Check 30-min interval
   const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
   const now = new Date().getTime();
-  const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 1800000;
+  const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 1800000; // 30 minutes
 
   if (canShowAd) {
-    if (!isMobile) {
+    localStorage.setItem('cineflix_last_ad_time', now.toString()); // Update timestamp immediately
+
+    if (isMobile) {
+      // MOBILE: Redirect in the same tab so 'Back' works naturally without reloading the app state.
+      // We set a flag in sessionStorage so we know they are coming back from an ad.
+      sessionStorage.setItem('returning_from_ad', 'true');
+      window.location.href = ADSTERRA_DIRECT_LINK;
+      return true; // Indicates an ad was shown and redirected
+    } else {
       // DESKTOP: Open 2 pop-under tabs securely
       const windowName1 = 'adWindow' + Math.random();
       const windowName2 = 'adWindow' + Math.random();
@@ -45,19 +51,32 @@ const triggerSmartAds = () => {
       if (pop1) pop1.blur();
       if (pop2) pop2.blur();
       window.focus();
-    } else {
-      // MOBILE: No external tabs opened to prevent app reload on 'Back'
-      // Future mobile ad-logic can be placed here if needed
     }
-    // Update the timestamp so ads won't bother for 30 mins
-    localStorage.setItem('cineflix_last_ad_time', now.toString());
   }
+  
+  // If no redirection happened, execute the normal action (like playing the video)
+  if (callback) callback();
+  return false;
 };
 
 export default function App() {
   const [appState, setAppState] = useState('splash');
   const [user, setUser] = useState(null);
   const [hasAdBlock, setHasAdBlock] = useState(false);
+
+  // Handle returning from mobile ad correctly
+  useEffect(() => {
+    const isReturning = sessionStorage.getItem('returning_from_ad');
+    if (isReturning) {
+      sessionStorage.removeItem('returning_from_ad');
+      // Force skip splash screen and go directly to home if they were already logged in
+      const savedUser = localStorage.getItem('cineflix_current_user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+        setAppState('home');
+      }
+    }
+  }, []);
 
   // 🛡️ ADBLOCK DETECTOR 🛡️
   useEffect(() => {
@@ -83,6 +102,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (appState !== 'splash') return; // Don't run this logic if we are already in home/login (e.g. from Ad return)
+
     const savedUser = localStorage.getItem('cineflix_current_user');
     const loginTime = localStorage.getItem('cineflix_login_time');
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
@@ -99,10 +120,8 @@ export default function App() {
       }
     }
 
-    if (appState === 'splash') {
-      const timer = setTimeout(() => setAppState(nextState), 7000);
-      return () => clearTimeout(timer);
-    }
+    const timer = setTimeout(() => setAppState(nextState), 7000);
+    return () => clearTimeout(timer);
   }, [appState]);
 
   // IF ADBLOCK IS DETECTED, SHOW WARNING AND BLOCK SITE
@@ -366,7 +385,7 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const carouselRef = useRef(null);
 
-  // Global Home Screen ad setup - ONLY Triggers on Desktop
+  // Global Desktop Click Ad (Unchanged)
   useEffect(() => {
     const handleGlobalClick = () => {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -481,14 +500,27 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   const handleWatchClick = (movie) => {
-    triggerSmartAds(); 
-    setPlayingVideo({ id: movie.id, type: movie.media_type }); 
+    // If triggerSmartAds returns true, it means it redirected (Mobile Ad). 
+    // In that case, we don't immediately open the video so it waits for the user to return.
+    const adTriggeredAndRedirected = triggerSmartAds(() => {
+      setPlayingVideo({ id: movie.id, type: movie.media_type });
+    });
+    
+    // Desktop will hit this immediately
+    if (!adTriggeredAndRedirected) {
+      setPlayingVideo({ id: movie.id, type: movie.media_type });
+    }
   };
 
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    triggerSmartAds(); 
-    window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`; 
+    const adTriggeredAndRedirected = triggerSmartAds(() => {
+      window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
+    });
+
+    if (!adTriggeredAndRedirected) {
+       window.location.href = `https://dl.vidsrc.vip/movie/${movie.id}`;
+    }
   };
 
   return (
@@ -727,7 +759,7 @@ function MovieApp({ user, setAppState, setUser }) {
         <div className="fullscreen-player">
           <iframe className="player-iframe" src={getEmbedUrl(playingVideo.type, playingVideo.id, activeServer)} allowFullScreen frameBorder="0" />
 
-          {/* FLOATING CONTROLS OVERLAY (Solves overlap & close button issues) */}
+
           <div className="player-controls-overlay">
             <div className="server-selector">
               <span style={{ fontSize: '0.85rem', color: '#fff', marginRight: '5px', fontWeight: 'bold' }}>Server:</span>
