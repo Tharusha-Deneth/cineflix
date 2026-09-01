@@ -23,15 +23,17 @@ const API_KEY = "3f9d0029783ac3366e5706c0575f7170";
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
-// Splash Screen Skip Logic (If returning from Ad)
 const getInitialState = () => {
   const isReturningFromAd = sessionStorage.getItem('cineflix_restore_state');
-  if (isReturningFromAd) return 'home';
+  const isPendingAction = sessionStorage.getItem('cineflix_pending_action');
+  if (isReturningFromAd || isPendingAction) return 'home';
 
   const savedUser = localStorage.getItem('cineflix_current_user');
+  const isGuest = localStorage.getItem('cineflix_guest_mode');
   const loginTime = localStorage.getItem('cineflix_login_time');
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-  if (savedUser && loginTime && (new Date().getTime() - parseInt(loginTime, 10) < SEVEN_DAYS)) {
+  
+  if ((savedUser && loginTime && (new Date().getTime() - parseInt(loginTime, 10) < SEVEN_DAYS)) || isGuest) {
     return 'home'; 
   }
   return 'splash';
@@ -111,7 +113,13 @@ function AuthScreen({ appState, setAppState, setUser }) {
   const saveSessionAndNavigate = (userData) => {
     localStorage.setItem('cineflix_current_user', JSON.stringify(userData));
     localStorage.setItem('cineflix_login_time', new Date().getTime().toString());
+    localStorage.removeItem('cineflix_guest_mode');
     setUser(userData);
+    setAppState('home');
+  };
+
+  const handleSkip = () => {
+    localStorage.setItem('cineflix_guest_mode', 'true');
     setAppState('home');
   };
 
@@ -152,7 +160,9 @@ function AuthScreen({ appState, setAppState, setUser }) {
       <style>
         {`
           @import url('https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css');
-          .auth-wrapper { background-color: #141414; width: 100vw; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 1rem; background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.95)), url('https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/US-en-20220502-popsignuptwoweeks-perspective_alpha_website_large.jpg'); background-size: cover; background-position: center; }
+          .auth-wrapper { position: relative; background-color: #141414; width: 100vw; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 1rem; background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.95)), url('https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/US-en-20220502-popsignuptwoweeks-perspective_alpha_website_large.jpg'); background-size: cover; background-position: center; }
+          .skip-btn { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px); transition: 0.3s; z-index: 10; font-size: 0.9rem; }
+          .skip-btn:hover { background: rgba(229,9,20,0.8); border-color: #E50914; }
           .login__container { background-color: #181818; box-shadow: 0 15px 50px rgba(0,0,0,0.9); padding: 2.2rem 1.5rem; border-radius: 1.75rem; display: grid; gap: 1.2rem; width: 100%; max-width: 440px; color: #ffffff; animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
           @keyframes slideDown { 0% { opacity: 0; transform: translateY(-40px); } 100% { opacity: 1; transform: translateY(0); } }
           .login__swiper { display: none; }
@@ -183,6 +193,9 @@ function AuthScreen({ appState, setAppState, setUser }) {
           }
         `}
       </style>
+      
+      <button className="skip-btn" onClick={handleSkip}>✕ Skip for now</button>
+      
       <div className="login__container">
         <div className="login__swiper">
           <div className="slider-overlay"></div>
@@ -253,39 +266,87 @@ function MovieApp({ user, setAppState, setUser }) {
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
   const [showAdGuide, setShowAdGuide] = useState(false);
-
+  const [resumeData, setResumeData] = useState(null);
+  
+  // 🔥 Toast, Locks & Modals 🔥
+  const [toastMessage, setToastMessage] = useState(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [seasonSelectMovie, setSeasonSelectMovie] = useState(null);
+  
+  // 🔥 Torrent App Guide State 🔥
+  const [showTorrentGuide, setShowTorrentGuide] = useState(false);
+  const [pendingDownloadMovie, setPendingDownloadMovie] = useState(null);
+  
   const carouselRef = useRef(null);
+  const toastTimeoutRef = useRef(null); 
 
-  // 🚀 RESTORE STATE AFTER AD RETURN 🚀
+  const showToast = (msg, duration = 4000) => {
+    setToastMessage(msg);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, duration); 
+  };
+
   useEffect(() => {
-    // Check if user is opening site for the first time
     const guideShown = localStorage.getItem('cineflix_ad_guide_shown');
     if (!guideShown) {
       setShowAdGuide(true);
     }
 
+    // Checking for Pending Download (after forcing login)
+    const pendingStr = sessionStorage.getItem('cineflix_pending_action');
+    if (pendingStr && user) {
+      try {
+        const { action, movie } = JSON.parse(pendingStr);
+        sessionStorage.removeItem('cineflix_pending_action');
+        if (action === 'download') {
+           openSingleMovie(movie);
+           setTimeout(() => {
+              const hasApp = localStorage.getItem('cineflix_torrent_app_installed');
+              if (!hasApp) {
+                setPendingDownloadMovie(movie);
+                setShowTorrentGuide(true);
+              } else {
+                proceedToDownload(movie);
+              }
+           }, 800);
+        }
+      } catch (e) {}
+    } else {
+      // Check for Continue Watching
+      const lastWatchedStr = localStorage.getItem('cineflix_last_watched');
+      if (lastWatchedStr) {
+        try {
+           const parsed = JSON.parse(lastWatchedStr);
+           if (Date.now() - parsed.timestamp < 7 * 24 * 3600 * 1000) { // Valid for 7 days
+              setResumeData(parsed);
+           }
+        } catch(e) {}
+      }
+    }
+
     const savedStateStr = sessionStorage.getItem('cineflix_restore_state');
-    if (savedStateStr) {
+    if (savedStateStr && !pendingStr) {
       try {
         const state = JSON.parse(savedStateStr);
         setActiveTab(state.activeTab);
-        
-        // Skip ad check and reopen movie directly
         openSingleMovie(state.selectedMovie, true); 
         
-        // Auto Play immediately if action was play
         if (state.action === 'play') {
           setTimeout(() => {
             setPlayingVideo({ 
               id: state.selectedMovie.id, 
               type: state.selectedMovie.media_type || (state.selectedMovie.first_air_date ? 'tv' : 'movie') 
             });
-          }, 1000); // slight delay to ensure UI mounts
+          }, 1000); 
         }
       } catch (e) { }
       sessionStorage.removeItem('cineflix_restore_state');
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -344,7 +405,10 @@ function MovieApp({ user, setAppState, setUser }) {
     fetchGridData();
   }, [activeTab]);
 
-  const openSingleMovie = async (movie, skipAd = false) => {
+  const openSingleMovie = async (movie, restoreMode = false) => {
+    // ⬇️ Trigged ad carefully on Single Page Open with 15-min cooldown
+    if (!restoreMode) openAdSafely();
+
     const type = movie.media_type || (movie.first_air_date ? 'tv' : 'movie');
     setSelectedMovie({ ...movie, media_type: type });
     setSingleTrailerKey("");
@@ -352,13 +416,18 @@ function MovieApp({ user, setAppState, setUser }) {
     setSimilarMovies([]);
     try {
       const [detailsRes, videoRes, similarRes] = await Promise.all([
-        fetch(`${BASE_URL}/${type}/${movie.id}?api_key=${API_KEY}`),
+        fetch(`${BASE_URL}/${type}/${movie.id}?api_key=${API_KEY}&append_to_response=external_ids`),
         fetch(`${BASE_URL}/${type}/${movie.id}/videos?api_key=${API_KEY}`),
         fetch(`${BASE_URL}/${type}/${movie.id}/similar?api_key=${API_KEY}`)
       ]);
       const detailsData = await detailsRes.json();
       const videoData = await videoRes.json();
       const similarData = await similarRes.json();
+      
+      if (detailsData.external_ids?.imdb_id) {
+        detailsData.imdb_id = detailsData.external_ids.imdb_id;
+      }
+      
       setSingleMovieDetails(detailsData);
       setSimilarMovies((similarData.results || []).filter(item => item.poster_path));
       const trailer = videoData.results?.find(vid => vid.type === "Trailer") || videoData.results?.[0];
@@ -377,6 +446,7 @@ function MovieApp({ user, setAppState, setUser }) {
   const handleLogout = () => {
     localStorage.removeItem('cineflix_current_user');
     localStorage.removeItem('cineflix_login_time');
+    localStorage.removeItem('cineflix_guest_mode');
     setUser(null);
     setAppState('login');
   };
@@ -388,51 +458,253 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
-  // 🔥 ACTION BUTTON CLICK HANDLERS (Plays Video + Opens Ads safely in SAME tab) 🔥
-  const handleWatchClick = (movie) => {
+  const openAdSafely = () => {
     const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
     const now = new Date().getTime();
-    const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
-
-    if (canShowAd) {
+    // 15 Minutes cooldown (900,000 ms) to avoid annoying users
+    if (!lastAdTime || (now - parseInt(lastAdTime)) > 900000) {
       localStorage.setItem('cineflix_last_ad_time', now.toString());
-      sessionStorage.setItem('cineflix_restore_state', JSON.stringify({
-        activeTab: activeTab,
-        selectedMovie: movie,
-        action: 'play'
-      }));
-      window.location.href = ADSTERRA_DIRECT_LINK; // Redirect in same tab
-    } else {
-      setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+      const pop = window.open(ADSTERRA_DIRECT_LINK, '_blank');
+      if (pop) pop.blur();
+      window.focus();
     }
   };
 
+  const handleWatchClick = (movie) => {
+    setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
+    // Saving last watched for resume feature!
+    localStorage.setItem('cineflix_last_watched', JSON.stringify({
+       title: movie.title || movie.name,
+       movie: movie,
+       timestamp: Date.now()
+    }));
+  };
+
+  // 🔥 FAST PARALLEL MATCHER CORE RUNNER 🔥
+  const executeMagnetDownload = async (searchTasks, displayTitle) => {
+    setIsDownloading(true);
+    showToast(`🚀 Deep Scanning Global Trackers...\nConnecting to EZTV, PirateBay & Torrentio...`, 10000);
+
+    try {
+      const magnetLink = await Promise.any(searchTasks);
+
+      showToast("✅ High-Quality Torrent Found!\nOpening your Torrent App automatically...");
+      setTimeout(() => {
+        window.location.href = magnetLink;
+        setIsDownloading(false);
+      }, 1000);
+
+    } catch (error) {
+      console.error("No torrents found:", error);
+      showToast(`⚠️ No torrents found for "${displayTitle}".\nIt might be too new or unreleased.`);
+      setIsDownloading(false);
+    }
+  };
+
+  // 🔥 THE ACTUAL DOWNLOAD PROCESS (Runs after App check) 🔥
+  const proceedToDownload = async (movie) => {
+    const isTV = movie.media_type === 'tv' || movie.first_air_date;
+
+    // If TV show, open Seasons modal selector!
+    if (isTV) {
+      let details = singleMovieDetails;
+      if (!details || !details.seasons) {
+        try {
+          const res = await fetch(`${BASE_URL}/tv/${movie.id}?api_key=${API_KEY}&append_to_response=external_ids`);
+          details = await res.json();
+          if (details.external_ids?.imdb_id) details.imdb_id = details.external_ids.imdb_id;
+          setSingleMovieDetails(details);
+        } catch (err) { }
+      }
+      setSeasonSelectMovie({ ...movie, details });
+      return;
+    }
+
+    // MOVIE DOWNLOAD LOGIC
+    const title = movie.title || movie.name;
+    const year = selectedMovie?.release_date ? selectedMovie.release_date.split('-')[0] : '';
+    const cleanTitleStr = title.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cleanTitle = encodeURIComponent(cleanTitleStr);
+    const imdbId = singleMovieDetails?.imdb_id;
+
+    const fetchJsonFast = async (url) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 6500);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        if (!res.ok) throw new Error("HTTP error");
+        return await res.json();
+      } catch (e) {
+        clearTimeout(id);
+        throw e;
+      }
+    };
+
+    const checkYTS = async (query) => {
+      const urls = [
+        `https://yts.mx/api/v2/list_movies.json?query_term=${encodeURIComponent(query)}`,
+        `https://yts.gg/api/v2/list_movies.json?query_term=${encodeURIComponent(query)}`,
+        `https://yts.do/api/v2/list_movies.json?query_term=${encodeURIComponent(query)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://yts.mx/api/v2/list_movies.json?query_term=${query}`)}`
+      ];
+      return Promise.any(urls.map(async (url) => {
+        const data = await fetchJsonFast(url);
+        if (data?.data?.movies?.length > 0) {
+           const m = data.data.movies[0];
+           const t = m.torrents.find(x => x.quality === '1080p') || m.torrents[0];
+           return `magnet:?xt=urn:btih:${t.hash}&dn=${cleanTitle}&tr=udp://open.demonii.com:1337/announce`;
+        }
+        throw new Error("Not on YTS");
+      }));
+    };
+
+    const checkTPB = async (query) => {
+      const urls = [
+        `https://apibay.org/q.php?q=${encodeURIComponent(query)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://apibay.org/q.php?q=${encodeURIComponent(query)}`)}`
+      ];
+      return Promise.any(urls.map(async (url) => {
+        const data = await fetchJsonFast(url);
+        if (data && data.length > 0 && data[0].id !== "0") {
+           const best = data.filter(t => t.category.startsWith("2")).sort((a,b) => parseInt(b.seeders) - parseInt(a.seeders))[0] || data[0];
+           return `magnet:?xt=urn:btih:${best.info_hash}&dn=${encodeURIComponent(best.name)}&tr=udp://tracker.opentrackr.org:1337/announce`;
+        }
+        throw new Error("Not on TPB");
+      }));
+    };
+
+    const tasks = [];
+    if (imdbId) {
+      tasks.push(checkYTS(imdbId));
+      tasks.push(checkTPB(imdbId));
+    }
+    tasks.push(checkYTS(`${cleanTitleStr} ${year}`.trim()));
+    tasks.push(checkYTS(cleanTitleStr));
+    tasks.push(checkTPB(`${cleanTitleStr} ${year}`.trim()));
+    tasks.push(checkTPB(cleanTitleStr));
+
+    executeMagnetDownload(tasks, title);
+  };
+
+  // 🔥 INTERCEPT DOWNLOAD BUTTON TO CHECK FOR TORRENT APP & LOGIN 🔥
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
-    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
-    const now = new Date().getTime();
-    const canShowAd = !lastAdTime || (now - parseInt(lastAdTime)) > 3600000;
+    if (isDownloading) return;
+    
+    openAdSafely(); // Download ad trigger
 
-    // REAL DOWNLOAD LINK using Google "Index of" trick for true MP4 downloads
-    const movieTitle = encodeURIComponent(movie.title || movie.name);
-    const dlLink = `https://www.google.com/search?q=intitle:"index.of"+(mp4|mkv)+"${movieTitle}"`;
-
-    if (canShowAd) {
-      localStorage.setItem('cineflix_last_ad_time', now.toString());
-      sessionStorage.setItem('cineflix_restore_state', JSON.stringify({
-        activeTab: activeTab,
-        selectedMovie: movie,
-        action: 'download'
-      }));
-      window.location.href = ADSTERRA_DIRECT_LINK; // Redirect in same tab
-    } else {
-      window.open(dlLink, '_blank');
+    // Check if Guest mode - Force Login
+    if (!user) {
+       showToast("⚠️ You need an account to Download! Please Sign In/Up.");
+       sessionStorage.setItem('cineflix_pending_action', JSON.stringify({ action: 'download', movie }));
+       setTimeout(() => setAppState('login'), 1500);
+       return;
     }
+
+    // Check if user has already acknowledged having a torrent app
+    const hasApp = localStorage.getItem('cineflix_torrent_app_installed');
+    
+    if (!hasApp) {
+      // Show the High Quality Download Labs Guide!
+      setPendingDownloadMovie(movie);
+      setShowTorrentGuide(true);
+    } else {
+      // Proceed directly
+      proceedToDownload(movie);
+    }
+  };
+
+  const handleDownloadTVSeason = (seasonNumber) => {
+    if (!seasonSelectMovie) return;
+    const title = seasonSelectMovie.title || seasonSelectMovie.name;
+    const originalName = seasonSelectMovie.original_name || seasonSelectMovie.details?.original_name || "";
+    const cleanTitleStr = title.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cleanOriginalStr = originalName ? originalName.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim() : "";
+    const imdbId = seasonSelectMovie.details?.imdb_id;
+    const sPadded = seasonNumber < 10 ? `S0${seasonNumber}` : `S${seasonNumber}`;
+    
+    setSeasonSelectMovie(null); // close modal
+
+    const fetchJsonFast = async (url) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 6500);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        if (!res.ok) throw new Error("HTTP error");
+        return await res.json();
+      } catch (e) {
+        clearTimeout(id);
+        throw e;
+      }
+    };
+
+    const checkTorrentio = async (imdb, sNum) => {
+      const url = `https://torrentio.strem.fun/stream/series/${imdb}:${sNum}:1.json`;
+      const data = await fetchJsonFast(url);
+      if (data?.streams?.length > 0) {
+        const stream = data.streams.find(s => s.infoHash) || data.streams[0];
+        if (stream?.infoHash) {
+          return `magnet:?xt=urn:btih:${stream.infoHash}&dn=${encodeURIComponent(title + " " + sPadded)}&tr=udp://tracker.opentrackr.org:1337/announce`;
+        }
+      }
+      throw new Error("Not on Torrentio");
+    };
+
+    const checkEZTV = async (imdb) => {
+      const cleanImdb = imdb.replace('tt', '');
+      const urls = [
+        `https://eztv.re/api/get-torrents?imdb_id=${cleanImdb}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://eztv.re/api/get-torrents?imdb_id=${cleanImdb}`)}`
+      ];
+      return Promise.any(urls.map(async (url) => {
+        const data = await fetchJsonFast(url);
+        if (data?.torrents?.length > 0) {
+          const matched = data.torrents.find(t => t.season == seasonNumber && t.magnet_url) || data.torrents[0];
+          if (matched?.magnet_url) return matched.magnet_url;
+        }
+        throw new Error("Not on EZTV");
+      }));
+    };
+
+    const checkTPB = async (query) => {
+      const urls = [
+        `https://apibay.org/q.php?q=${encodeURIComponent(query)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://apibay.org/q.php?q=${encodeURIComponent(query)}`)}`
+      ];
+      return Promise.any(urls.map(async (url) => {
+        const data = await fetchJsonFast(url);
+        if (data && data.length > 0 && data[0].id !== "0") {
+           const best = data.filter(t => t.category.startsWith("2")).sort((a,b) => parseInt(b.seeders) - parseInt(a.seeders))[0] || data[0];
+           return `magnet:?xt=urn:btih:${best.info_hash}&dn=${encodeURIComponent(best.name)}&tr=udp://tracker.opentrackr.org:1337/announce`;
+        }
+        throw new Error("Not on TPB");
+      }));
+    };
+
+    const tvTasks = [];
+    if (imdbId) {
+      tvTasks.push(checkTorrentio(imdbId, seasonNumber));
+      tvTasks.push(checkEZTV(imdbId));
+      tvTasks.push(checkTPB(imdbId));
+    }
+    tvTasks.push(checkTPB(`${cleanTitleStr} ${sPadded}`));
+    tvTasks.push(checkTPB(`${cleanTitleStr} Season ${seasonNumber}`));
+    tvTasks.push(checkTPB(`${cleanTitleStr}`));
+
+    if (cleanOriginalStr && cleanOriginalStr !== cleanTitleStr) {
+      tvTasks.push(checkTPB(`${cleanOriginalStr} ${sPadded}`));
+      tvTasks.push(checkTPB(`${cleanOriginalStr} Season ${seasonNumber}`));
+      tvTasks.push(checkTPB(`${cleanOriginalStr}`));
+    }
+
+    executeMagnetDownload(tvTasks, `${title} - Season ${seasonNumber}`);
   };
 
   const copyAdGuard = () => {
     navigator.clipboard.writeText('dns.adguard.com');
-    alert("Copied: dns.adguard.com");
+    showToast("✅ Copied: dns.adguard.com\nGo to your network settings and paste it!");
   };
 
   return (
@@ -464,11 +736,9 @@ function MovieApp({ user, setAppState, setUser }) {
           .rows-container { margin-top: -10px; position: relative; z-index: 20; padding: 0 0 2rem 1.25rem; }
           .row { margin-bottom: 30px; } .row h2 { font-size: 1.15rem; margin-bottom: 12px; font-weight: 700; color: #e5e5e5; }
           .row-posters { display: flex; overflow-y: visible; overflow-x: auto; gap: 18px; scroll-behavior: smooth; padding: 25px 1.25rem 25px 0; -webkit-overflow-scrolling: touch; } .row-posters::-webkit-scrollbar { display: none; }
-          
-          /* TOUCH ZOOM HOVER & ACTIVE (NO RED BORDER) */
           .row-poster { width: clamp(110px, 30vw, 160px); height: clamp(165px, 45vw, 240px); object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0; box-shadow: 0 6px 15px rgba(0,0,0,0.6); transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease; }
           .row-poster:hover, .row-poster:active { transform: scale(1.15); z-index: 30; box-shadow: 0 16px 35px rgba(0,0,0,0.95); }
-          
+
           .search-header { display: flex; justify-content: center; align-items: center; margin-top: 20px; margin-bottom: 40px; width: 100%; }
           .search-input-wrapper { position: relative; width: 100%; max-width: 650px; }
           .search-input { width: 100%; padding: 18px 25px 18px 55px; background: rgba(30, 30, 30, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50px; color: #fff; font-size: 1.1rem; font-weight: 500; outline: none; backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; font-family: 'Montserrat', sans-serif; }
@@ -500,6 +770,7 @@ function MovieApp({ user, setAppState, setUser }) {
           .btn-red-play:hover { background-color: #f40612; transform: scale(1.04); }
           .btn-gray-download { background-color: rgba(255,255,255,0.18); color: #ffffff; padding: 12px 28px; font-size: 1rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.2s; text-decoration: none; backdrop-filter: blur(8px); }
           .btn-gray-download:hover { background-color: rgba(255,255,255,0.28); transform: scale(1.04); }
+          .btn-gray-download:disabled { opacity: 0.6; cursor: not-allowed; }
           
           .showcase-bottom-carousel { position: relative; z-index: 10; padding: 1rem 2.5rem 2rem 2.5rem; width: 100%; }
           .showcase-carousel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -511,11 +782,9 @@ function MovieApp({ user, setAppState, setUser }) {
           .showcase-card { width: clamp(110px, 14vw, 150px); height: clamp(160px, 20vw, 210px); border-radius: 12px; object-fit: cover; flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.12); box-shadow: 0 8px 20px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s ease; }
           .showcase-card:hover, .showcase-card:active { transform: scale(1.15); z-index: 40; border-color: #E50914; box-shadow: 0 16px 35px rgba(0,0,0,0.95); }
 
-          /* 🔥 MOBILE VIDEO PLAYER FIXES 🔥 */
           .fullscreen-player { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; justify-content: center; align-items: center; }
           .player-iframe { width: 100%; height: 100%; max-height: 100vh; border: none; z-index: 9999; }
           
-          /* Overlay in Top Right */
           .player-controls-overlay {
             position: absolute; top: 20px; right: 20px; z-index: 10000;
             display: flex; align-items: center; gap: 15px;
@@ -530,10 +799,9 @@ function MovieApp({ user, setAppState, setUser }) {
           .close-player-btn { background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
           .close-player-btn:hover { background: #E50914; transform: scale(1.1); }
 
-          /* 💡 AD GUIDE POPUP STYLES 💡 */
-          .ad-guide-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 999999; display: flex; justify-content: center; align-items: center; padding: 20px; }
+          .ad-guide-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 999999; display: flex; justify-content: center; align-items: center; padding: 20px; }
           .ad-guide-box { background: #141414; padding: 30px; border-radius: 20px; border: 1px solid #333; max-width: 500px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
-          .ad-guide-box h2 { color: #E50914; font-family: 'Unbounded', sans-serif; font-size: 1.5rem; margin-bottom: 15px; }
+          .ad-guide-box h2 { color: #E50914; font-family: 'Unbounded', sans-serif; font-size: 1.4rem; margin-bottom: 15px; }
           .ad-guide-box p { color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 20px; }
           .guide-section { background: #1f1f1f; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
           .guide-section h3 { color: #fff; font-size: 1.1rem; margin-bottom: 8px; }
@@ -544,6 +812,57 @@ function MovieApp({ user, setAppState, setUser }) {
           .copy-box button:hover { background: #c90812; }
           .got-it-btn { width: 100%; padding: 15px; background: #fff; color: #000; font-weight: bold; font-size: 1.1rem; border: none; border-radius: 8px; margin-top: 10px; cursor: pointer; transition: 0.2s; }
           .got-it-btn:hover { background: #e5e5e5; transform: scale(1.02); }
+          .btn-cancel { background: #333 !important; color: white !important; }
+          .btn-cancel:hover { background: #444 !important; }
+
+          /* 🔥 SEASONS MODAL STYLES 🔥 */
+          .seasons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; max-height: 50vh; overflow-y: auto; margin: 20px 0; padding-right: 5px; }
+          .seasons-grid::-webkit-scrollbar { width: 4px; }
+          .seasons-grid::-webkit-scrollbar-thumb { background: #E50914; border-radius: 4px; }
+          .season-btn { background: #222; border: 1px solid #333; color: #fff; padding: 14px 10px; border-radius: 10px; font-weight: bold; font-size: 0.95rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s ease; }
+          .season-btn:hover { background: #E50914; border-color: #E50914; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(229, 9, 20, 0.4); }
+          .season-btn span { font-size: 0.75rem; color: #aaa; font-weight: 500; }
+          .season-btn:hover span { color: #fff; }
+
+          /* 🔥 TORRENT APP GUIDE STYLES 🔥 */
+          .torrent-apps-grid { display: grid; gap: 12px; margin: 20px 0; }
+          .torrent-app-btn { background: #222; border: 1px solid #444; color: #fff; padding: 14px; border-radius: 10px; text-decoration: none; display: flex; justify-content: space-between; align-items: center; font-weight: bold; transition: 0.2s; }
+          .torrent-app-btn:hover { border-color: #E50914; background: #E50914; color: #fff; transform: scale(1.02); }
+          .torrent-app-os { font-size: 0.75rem; background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 6px; }
+
+          /* 🔥 CUSTOM ANIMATED TOAST CSS 🔥 */
+          .custom-toast {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(18, 18, 18, 0.98);
+            border: 1px solid rgba(229, 9, 20, 0.5);
+            border-left: 5px solid #E50914;
+            border-radius: 10px;
+            padding: 16px 24px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.8), 0 0 20px rgba(229, 9, 20, 0.3);
+            z-index: 9999999;
+            animation: slideDownToast 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            text-align: center;
+            min-width: 320px;
+            width: max-content;
+            max-width: 90vw;
+          }
+          .custom-toast p:first-child { margin: 0 0 8px 0; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;}
+          .custom-toast p:last-child { margin: 0; font-size: 0.85rem; color: #e0e0e0; font-weight: 500; line-height: 1.4; }
+
+          @keyframes slideDownToast {
+            0% { top: -100px; opacity: 0; transform: translate(-50%, -20px) scale(0.9); }
+            100% { top: 30px; opacity: 1; transform: translate(-50%, 0) scale(1); }
+          }
+          
+          /* 🔥 RESUME WATCHING POPUP CSS 🔥 */
+          .resume-btns { display: flex; gap: 15px; margin-top: 20px; }
+          .resume-btns button { flex: 1; padding: 12px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: 0.2s; }
+          .btn-yes { background: #E50914; color: #fff; } .btn-yes:hover { background: #c90812; }
 
           @media screen and (max-width: 768px) {
             .showcase-body { padding-top: 25vh !important; }
@@ -574,7 +893,89 @@ function MovieApp({ user, setAppState, setUser }) {
         `}
       </style>
 
-      {/* 💡 AD-FREE GUIDE MODAL (First Time Only) 💡 */}
+      {/* 🔥 CUSTOM TOAST HTML 🔥 */}
+      {toastMessage && (
+        <div className="custom-toast">
+          {toastMessage.split('\n').map((line, i) => (
+            <p key={i} style={{ color: line.includes('⚠️') ? '#ff6b6b' : (i === 0 && line.includes('✅') ? '#4ade80' : '#e0e0e0') }}>{line}</p>
+          ))}
+        </div>
+      )}
+
+      {/* 🔥 CONTINUE WATCHING POPUP 🔥 */}
+      {resumeData && !selectedMovie && !playingVideo && (
+        <div className="ad-guide-overlay">
+          <div className="ad-guide-box" style={{ textAlign: 'center' }}>
+            <h2 style={{ color: '#fff' }}>Continue Watching? 🍿</h2>
+            <p style={{ margin: '15px 0' }}>You left off at <strong>{resumeData.title}</strong>.<br/>Would you like to resume?</p>
+            <div className="resume-btns">
+              <button className="btn-yes" onClick={() => {
+                  openSingleMovie(resumeData.movie, true);
+                  setTimeout(() => handleWatchClick(resumeData.movie), 800);
+                  setResumeData(null);
+              }}>Yes, Resume</button>
+              <button className="btn-cancel" onClick={() => {
+                  localStorage.removeItem('cineflix_last_watched');
+                  setResumeData(null);
+              }}>No, Browse</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 APP DOWNLOAD GUIDE MODAL (First Time Only) 🔥 */}
+      {showTorrentGuide && (
+        <div className="ad-guide-overlay">
+          <div className="ad-guide-box">
+            <h2 style={{ color: '#fff', fontSize: '1.4rem' }}>🚀 HIGH QUALITY <span style={{ color: '#E50914' }}>DOWNLOAD LABS</span></h2>
+            <p>To download movies in 1080p/4K directly to your device, you need a Torrent App installed. Choose one below:</p>
+            
+            <div className="torrent-apps-grid">
+              <a href="https://play.google.com/store/apps/details?id=com.utorrent.client" target="_blank" rel="noopener noreferrer" className="torrent-app-btn">
+                <span>uTorrent Client</span>
+                <span className="torrent-app-os">📱 Android</span>
+              </a>
+              <a href="https://play.google.com/store/apps/details?id=com.delphicoder.flud" target="_blank" rel="noopener noreferrer" className="torrent-app-btn">
+                <span>Flud Downloader</span>
+                <span className="torrent-app-os">📱 Android</span>
+              </a>
+              <a href="https://www.qbittorrent.org/download" target="_blank" rel="noopener noreferrer" className="torrent-app-btn">
+                <span>qBittorrent</span>
+                <span className="torrent-app-os">💻 Windows / Mac</span>
+              </a>
+            </div>
+
+            <button className="got-it-btn" style={{ background: '#E50914', color: '#fff', border: 'none' }} onClick={() => {
+              localStorage.setItem('cineflix_torrent_app_installed', 'true');
+              setShowTorrentGuide(false);
+              proceedToDownload(pendingDownloadMovie);
+            }}>I already have a Torrent App ➡️</button>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 TV SEASONS SELECTOR MODAL 🔥 */}
+      {seasonSelectMovie && (
+        <div className="ad-guide-overlay" onClick={() => setSeasonSelectMovie(null)}>
+          <div className="ad-guide-box" onClick={(e) => e.stopPropagation()}>
+            <h2>📺 Select Season to Download</h2>
+            <p style={{ margin: '0 0 15px 0' }}>Choose which season of <b>"{seasonSelectMovie.title || seasonSelectMovie.name}"</b> you want to download:</p>
+            
+            <div className="seasons-grid">
+              {Array.from({ length: seasonSelectMovie.details?.number_of_seasons || 1 }, (_, i) => i + 1).map((seasonNum) => (
+                <button key={seasonNum} className="season-btn" onClick={() => handleDownloadTVSeason(seasonNum)}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style={{ marginBottom: '2px' }}><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                  Season {seasonNum}
+                  <span>Full Season Pack</span>
+                </button>
+              ))}
+            </div>
+
+            <button className="got-it-btn" style={{ background: '#222', color: '#fff' }} onClick={() => setSeasonSelectMovie(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {showAdGuide && (
         <div className="ad-guide-overlay">
           <div className="ad-guide-box">
@@ -641,14 +1042,14 @@ function MovieApp({ user, setAppState, setUser }) {
                 <h1 className="banner-title">{bannerMovie?.title || bannerMovie?.name || "MONEY HEIST"}</h1>
                 <p className="banner-description">{bannerMovie?.overview}</p>
                 <div className="banner-buttons">
-                  <button className="banner-button play-btn" onClick={() => openSingleMovie(bannerMovie, true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> View Info</button>
+                  <button className="banner-button play-btn" onClick={() => openSingleMovie(bannerMovie)}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> View Info</button>
                 </div>
               </div>
             </header>
             <div className="rows-container">
-              <div className="row"><h2>New this week</h2><div className="row-posters">{trending.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
-              <div className="row"><h2>Netflix Originals</h2><div className="row-posters">{netflixOriginals.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
-              <div className="row"><h2>Top Rated</h2><div className="row-posters">{topRated.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.title} />)}</div></div>
+              <div className="row"><h2>New this week</h2><div className="row-posters">{trending.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
+              <div className="row"><h2>Netflix Originals</h2><div className="row-posters">{netflixOriginals.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} />)}</div></div>
+              <div className="row"><h2>Top Rated</h2><div className="row-posters">{topRated.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.title} />)}</div></div>
             </div>
           </>
         )}
@@ -671,7 +1072,7 @@ function MovieApp({ user, setAppState, setUser }) {
             </div>
             <div className="movies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
               {searchResults.map(movie => movie.poster_path && (
-                <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
+                <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />
               ))}
             </div>
           </div>
@@ -679,7 +1080,7 @@ function MovieApp({ user, setAppState, setUser }) {
         {['tv', 'movies', 'trending'].includes(activeTab) && (
           <div className="page-content">
             <h1 style={{ fontSize: '1.6rem', marginBottom: '20px', fontWeight: 'bold' }}>{activeTab === 'tv' ? 'TV Shows' : activeTab === 'movies' ? 'Movies' : 'Trending Now'}</h1>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{gridData.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie, true)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>{gridData.map(movie => movie.poster_path && <img key={movie.id} onClick={() => openSingleMovie(movie)} className="row-poster" src={`${IMAGE_BASE_URL}${movie.poster_path}`} alt={movie.name} style={{ width: '100%', height: '200px' }} />)}</div>
           </div>
         )}
       </main>
@@ -702,16 +1103,16 @@ function MovieApp({ user, setAppState, setUser }) {
               <span className="stars-rating">★★★★★</span>
               <span>{selectedMovie.release_date ? selectedMovie.release_date.split('-')[0] : (selectedMovie.first_air_date ? selectedMovie.first_air_date.split('-')[0] : '2024')}</span>
               <span>{singleMovieDetails?.genres?.map(g => g.name).slice(0, 3).join(', ') || 'Action, Drama'}</span>
-              <span>{singleMovieDetails?.runtime ? `${Math.floor(singleMovieDetails.runtime / 60)}h ${singleMovieDetails.runtime % 60}min` : '2h 15min'}</span>
+              <span>{singleMovieDetails?.runtime ? `${Math.floor(singleMovieDetails.runtime / 60)}h ${singleMovieDetails.runtime % 60}min` : (singleMovieDetails?.number_of_seasons ? `${singleMovieDetails.number_of_seasons} Seasons` : 'TV Series')}</span>
             </div>
             <p className="showcase-overview">{selectedMovie.overview}</p>
             <div className="showcase-buttons">
               <button className="btn-red-play" onClick={() => handleWatchClick(selectedMovie)}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> Play
               </button>
-              <a href="#" className="btn-gray-download" onClick={(e) => handleDownloadClick(e, selectedMovie)}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg> Download
-              </a>
+              <button className="btn-gray-download" disabled={isDownloading} onClick={(e) => handleDownloadClick(e, selectedMovie)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg> {isDownloading ? 'Searching...' : 'Download'}
+              </button>
             </div>
           </div>
           <div className="showcase-bottom-carousel">
@@ -723,7 +1124,7 @@ function MovieApp({ user, setAppState, setUser }) {
               </div>
             </div>
             <div className="showcase-cards-scroll" ref={carouselRef}>
-              {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && <img key={m.id} src={`${IMAGE_BASE_URL}${m.poster_path}`} alt={m.title || m.name} className="showcase-card" onClick={() => openSingleMovie(m, true)} />)}
+              {(similarMovies.length > 0 ? similarMovies : trending).map((m) => m.poster_path && <img key={m.id} src={`${IMAGE_BASE_URL}${m.poster_path}`} alt={m.title || m.name} className="showcase-card" onClick={() => openSingleMovie(m)} />)}
             </div>
           </div>
         </div>
