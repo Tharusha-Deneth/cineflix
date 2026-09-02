@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup, 
+  onAuthStateChanged,
+  GoogleAuthProvider 
+} from "firebase/auth";
 
 // 👇 Firebase Config 👇
 const firebaseConfig = {
@@ -24,9 +31,8 @@ const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original";
 
 const getInitialState = () => {
-  const isReturningFromAd = sessionStorage.getItem('cineflix_restore_state');
   const isPendingAction = sessionStorage.getItem('cineflix_pending_action');
-  if (isReturningFromAd || isPendingAction) return 'home';
+  if (isPendingAction) return 'home';
 
   const savedUser = localStorage.getItem('cineflix_current_user');
   const isGuest = localStorage.getItem('cineflix_guest_mode');
@@ -45,13 +51,55 @@ export default function App() {
     const savedUser = localStorage.getItem('cineflix_current_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [globalSuccess, setGlobalSuccess] = useState(false);
 
   useEffect(() => {
-    if (appState === 'splash') {
-      const timer = setTimeout(() => setAppState('login'), 7000);
-      return () => clearTimeout(timer);
-    }
-  }, [appState]);
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!isMounted) return;
+
+      if (currentUser) {
+        const userData = {
+          id: currentUser.uid, 
+          name: currentUser.displayName || currentUser.email.split('@')[0], 
+          email: currentUser.email
+        };
+        localStorage.setItem('cineflix_current_user', JSON.stringify(userData));
+        localStorage.setItem('cineflix_login_time', new Date().getTime().toString());
+        localStorage.removeItem('cineflix_guest_mode');
+        setUser(userData);
+        
+        if (appState === 'splash') setAppState('home');
+        setIsInitializing(false);
+      } else {
+        setUser(null);
+        localStorage.removeItem('cineflix_current_user');
+        
+        const isGuest = localStorage.getItem('cineflix_guest_mode');
+        const pendingAction = sessionStorage.getItem('cineflix_pending_action');
+        
+        if (isGuest || pendingAction) {
+           if (appState === 'splash') setAppState('home');
+        } else {
+           if (appState === 'splash') {
+              setTimeout(() => { if (isMounted) setAppState('login'); }, 4000);
+           }
+        }
+        setIsInitializing(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [appState]); 
+
+  if (isInitializing && appState === 'splash') {
+    return <SplashScreen />;
+  }
 
   return (
     <>
@@ -63,10 +111,34 @@ export default function App() {
           #netlify-badge, netlify-toolbar, iframe[title*="Netlify"], a[href^="https://www.netlify.com"] { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; }
         `}
       </style>
-      {appState === 'splash' && <SplashScreen />}
-      {(appState === 'login' || appState === 'signup') && <AuthScreen appState={appState} setAppState={setAppState} setUser={setUser} />}
-      {appState === 'home' && <MovieApp user={user} setAppState={setAppState} setUser={setUser} />}
+      
+      {globalSuccess && <SuccessAnimation />}
+      {appState === 'splash' && !globalSuccess && <SplashScreen />}
+      {(appState === 'login' || appState === 'signup') && !globalSuccess && <AuthScreen appState={appState} setAppState={setAppState} setGlobalSuccess={setGlobalSuccess} />}
+      {appState === 'home' && !globalSuccess && <MovieApp user={user} setAppState={setAppState} />}
     </>
+  );
+}
+
+function SuccessAnimation() {
+  return (
+    <div className="success-overlay">
+      <style>
+        {`
+          .success-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #141414; z-index: 999999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+          .check-circle { width: 100px; height: 100px; background: #4ade80; border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; box-shadow: 0 10px 30px rgba(74, 222, 128, 0.4); }
+          .check-icon { color: #fff; font-size: 50px; font-weight: bold; animation: checkPop 0.4s ease 0.3s forwards; opacity: 0; transform: scale(0.5); }
+          .success-text { margin-top: 20px; font-family: 'Unbounded', sans-serif; font-size: 1.5rem; color: #fff; animation: fadeUp 0.6s ease 0.4s forwards; opacity: 0; transform: translateY(20px); }
+          @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+          @keyframes checkPop { 100% { opacity: 1; transform: scale(1); } }
+          @keyframes fadeUp { 100% { opacity: 1; transform: translateY(0); } }
+        `}
+      </style>
+      <div className="check-circle">
+        <span className="check-icon">✓</span>
+      </div>
+      <div className="success-text">Success!</div>
+    </div>
   );
 }
 
@@ -78,8 +150,8 @@ function SplashScreen() {
         {`
           .splash-container { width: 100vw; height: 100vh; background-color: #000; display: flex; justify-content: center; align-items: center; perspective: 1000px; overflow: hidden; }
           .splash-title { display: flex; font-size: clamp(2.5rem, 8vw, 6rem); font-weight: 900; font-family: 'Unbounded', sans-serif; letter-spacing: clamp(4px, 1.5vw, 12px); transform-style: preserve-3d; }
-          .cinematic-letter { display: inline-block; opacity: 0; color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.4); animation: cinematicSequence 6s forwards ease-in-out; }
-          @keyframes cinematicSequence { 0% { opacity: 0; transform: translateZ(-300px) scale(0.5); } 15% { opacity: 1; transform: translateZ(0) scale(1); color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 30% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 40% { color: #ffffff; transform: translateZ(50px) scale(1.1); text-shadow: 0 0 20px #ffffff, 0 0 40px #E50914, 0 0 60px #E50914; } 50% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 70% { opacity: 1; transform: translateY(0) rotate(0deg); filter: blur(0); } 90% { opacity: 0; transform: translateY(150px) rotate(25deg) scale(0.8); filter: blur(12px); } 100% { opacity: 0; transform: translateY(200px); } }
+          .cinematic-letter { display: inline-block; opacity: 0; color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.4); animation: cinematicSequence 4s forwards ease-in-out; }
+          @keyframes cinematicSequence { 0% { opacity: 0; transform: translateZ(-300px) scale(0.5); } 15% { opacity: 1; transform: translateZ(0) scale(1); color: #E50914; text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 30% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 40% { color: #ffffff; transform: translateZ(50px) scale(1.1); text-shadow: 0 0 20px #ffffff, 0 0 40px #E50914, 0 0 60px #E50914; } 50% { color: #E50914; transform: translateZ(0) scale(1); text-shadow: 0px 4px 15px rgba(229, 9, 20, 0.5); } 70% { opacity: 1; transform: translateY(0) rotate(0deg); filter: blur(0); } 100% { opacity: 0; transform: translateY(200px); filter: blur(12px); } }
         `}
       </style>
       <div className="splash-title">
@@ -89,7 +161,7 @@ function SplashScreen() {
   );
 }
 
-function AuthScreen({ appState, setAppState, setUser }) {
+function AuthScreen({ appState, setAppState, setGlobalSuccess }) {
   const isLogin = appState === 'login';
   const [showPass, setShowPass] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -110,17 +182,18 @@ function AuthScreen({ appState, setAppState, setUser }) {
     return () => clearInterval(interval);
   }, []);
 
-  const saveSessionAndNavigate = (userData) => {
-    localStorage.setItem('cineflix_current_user', JSON.stringify(userData));
-    localStorage.setItem('cineflix_login_time', new Date().getTime().toString());
-    localStorage.removeItem('cineflix_guest_mode');
-    setUser(userData);
-    setAppState('home');
-  };
-
   const handleSkip = () => {
     localStorage.setItem('cineflix_guest_mode', 'true');
     setAppState('home');
+  };
+
+  const executeSuccessAndGoHome = () => {
+    localStorage.removeItem('cineflix_guest_mode');
+    setGlobalSuccess(true);
+    setTimeout(() => {
+      setGlobalSuccess(false);
+      setAppState('home');
+    }, 2000);
   };
 
   const handleAuthSubmit = async (e) => {
@@ -129,30 +202,31 @@ function AuthScreen({ appState, setAppState, setUser }) {
     setLoading(true);
     try {
       if (isLogin) {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        saveSessionAndNavigate({ id: userCredential.user.uid, name: userCredential.user.displayName || email.split('@')[0], email: userCredential.user.email });
+        await signInWithEmailAndPassword(auth, email, password);
       } else {
         if (!fullName) { setErrorMsg("Full Name is required"); setLoading(false); return; }
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        saveSessionAndNavigate({ id: userCredential.user.uid, name: fullName, email: userCredential.user.email });
+        await createUserWithEmailAndPassword(auth, email, password);
       }
+      executeSuccessAndGoHome();
     } catch (error) {
-      if (error.code === 'auth/email-already-in-use') setErrorMsg('Email is already registered. Please Log In.');
-      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setErrorMsg('Invalid email or password.');
-      else if (error.code === 'auth/weak-password') setErrorMsg('Password should be at least 6 characters.');
-      else setErrorMsg(error.message);
-    } finally { setLoading(false); }
+      setErrorMsg(error.message.includes('wrong-password') || error.message.includes('invalid-credential') ? 'Invalid email or password.' : error.message);
+      setLoading(false);
+    } 
   };
 
   const handleGoogleSignIn = async () => {
     setErrorMsg('');
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      saveSessionAndNavigate({ id: result.user.uid, name: result.user.displayName || 'Google User', email: result.user.email });
+      await signInWithPopup(auth, googleProvider);
+      executeSuccessAndGoHome();
     } catch (error) {
-      setErrorMsg("Sign-in failed or cancelled.");
-    } finally { setLoading(false); }
+      console.error("Google Auth Error:", error);
+      if (error.code !== 'auth/popup-closed-by-user') {
+        setErrorMsg("Google Sign In failed: " + error.message);
+      }
+      setLoading(false);
+    }
   };
 
   return (
@@ -247,7 +321,7 @@ function AuthScreen({ appState, setAppState, setUser }) {
 }
 
 // 3. MAIN MOVIE APP
-function MovieApp({ user, setAppState, setUser }) {
+function MovieApp({ user, setAppState }) {
   const [activeTab, setActiveTab] = useState('home');
   const [trending, setTrending] = useState([]);
   const [netflixOriginals, setNetflixOriginals] = useState([]);
@@ -265,13 +339,12 @@ function MovieApp({ user, setAppState, setUser }) {
 
   const [playingVideo, setPlayingVideo] = useState(null);
   const [activeServer, setActiveServer] = useState(1);
-  const [showAdGuide, setShowAdGuide] = useState(false);
-  const [resumeData, setResumeData] = useState(null);
   
   // 🔥 Toast, Locks & Modals 🔥
   const [toastMessage, setToastMessage] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [seasonSelectMovie, setSeasonSelectMovie] = useState(null);
+  const [resumeData, setResumeData] = useState(null);
   
   // 🔥 Torrent App Guide State 🔥
   const [showTorrentGuide, setShowTorrentGuide] = useState(false);
@@ -291,60 +364,32 @@ function MovieApp({ user, setAppState, setUser }) {
   };
 
   useEffect(() => {
-    const guideShown = localStorage.getItem('cineflix_ad_guide_shown');
-    if (!guideShown) {
-      setShowAdGuide(true);
-    }
-
-    // Checking for Pending Download (after forcing login)
+    // 🔥 PENDING ACTION RESUMER (Triggers the guide popup right after login!) 🔥
     const pendingStr = sessionStorage.getItem('cineflix_pending_action');
     if (pendingStr && user) {
       try {
         const { action, movie } = JSON.parse(pendingStr);
         sessionStorage.removeItem('cineflix_pending_action');
         if (action === 'download') {
-           openSingleMovie(movie);
            setTimeout(() => {
-              const hasApp = localStorage.getItem('cineflix_torrent_app_installed');
-              if (!hasApp) {
+             openSingleMovie(movie, true);
+             setTimeout(() => {
                 setPendingDownloadMovie(movie);
-                setShowTorrentGuide(true);
-              } else {
-                proceedToDownload(movie);
-              }
-           }, 800);
+                setShowTorrentGuide(true); // Always pop the guide!
+             }, 800);
+           }, 500); 
         }
       } catch (e) {}
-    } else {
-      // Check for Continue Watching
+    } else if (!pendingStr) {
       const lastWatchedStr = localStorage.getItem('cineflix_last_watched');
       if (lastWatchedStr) {
         try {
            const parsed = JSON.parse(lastWatchedStr);
-           if (Date.now() - parsed.timestamp < 7 * 24 * 3600 * 1000) { // Valid for 7 days
+           if (Date.now() - parsed.timestamp < 7 * 24 * 3600 * 1000) { 
               setResumeData(parsed);
            }
         } catch(e) {}
       }
-    }
-
-    const savedStateStr = sessionStorage.getItem('cineflix_restore_state');
-    if (savedStateStr && !pendingStr) {
-      try {
-        const state = JSON.parse(savedStateStr);
-        setActiveTab(state.activeTab);
-        openSingleMovie(state.selectedMovie, true); 
-        
-        if (state.action === 'play') {
-          setTimeout(() => {
-            setPlayingVideo({ 
-              id: state.selectedMovie.id, 
-              type: state.selectedMovie.media_type || (state.selectedMovie.first_air_date ? 'tv' : 'movie') 
-            });
-          }, 1000); 
-        }
-      } catch (e) { }
-      sessionStorage.removeItem('cineflix_restore_state');
     }
   }, [user]);
 
@@ -405,9 +450,19 @@ function MovieApp({ user, setAppState, setUser }) {
     fetchGridData();
   }, [activeTab]);
 
-  const openSingleMovie = async (movie, restoreMode = false) => {
-    // ⬇️ Trigged ad carefully on Single Page Open with 15-min cooldown
-    if (!restoreMode) openAdSafely();
+  const openAdSafely = () => {
+    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
+    const now = new Date().getTime();
+    if (!lastAdTime || (now - parseInt(lastAdTime)) > 180000) {
+      localStorage.setItem('cineflix_last_ad_time', now.toString());
+      const pop = window.open(ADSTERRA_DIRECT_LINK, '_blank');
+      if (pop) pop.blur();
+      window.focus();
+    }
+  };
+
+  const openSingleMovie = async (movie, skipAd = false) => {
+    if (!skipAd) openAdSafely();
 
     const type = movie.media_type || (movie.first_air_date ? 'tv' : 'movie');
     setSelectedMovie({ ...movie, media_type: type });
@@ -443,12 +498,18 @@ function MovieApp({ user, setAppState, setUser }) {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('cineflix_current_user');
-    localStorage.removeItem('cineflix_login_time');
-    localStorage.removeItem('cineflix_guest_mode');
-    setUser(null);
-    setAppState('login');
+  const handleAuthAction = () => {
+    if (user) {
+      const authInstance = getAuth();
+      authInstance.signOut();
+      localStorage.removeItem('cineflix_current_user');
+      localStorage.removeItem('cineflix_login_time');
+      localStorage.removeItem('cineflix_guest_mode');
+      setAppState('login');
+    } else {
+      localStorage.removeItem('cineflix_guest_mode');
+      setAppState('login');
+    }
   };
 
   const getEmbedUrl = (type, id, server) => {
@@ -458,21 +519,8 @@ function MovieApp({ user, setAppState, setUser }) {
     return `https://vidsrc.to/embed/${type}/${id}`;
   };
 
-  const openAdSafely = () => {
-    const lastAdTime = localStorage.getItem('cineflix_last_ad_time');
-    const now = new Date().getTime();
-    // 15 Minutes cooldown (900,000 ms) to avoid annoying users
-    if (!lastAdTime || (now - parseInt(lastAdTime)) > 900000) {
-      localStorage.setItem('cineflix_last_ad_time', now.toString());
-      const pop = window.open(ADSTERRA_DIRECT_LINK, '_blank');
-      if (pop) pop.blur();
-      window.focus();
-    }
-  };
-
   const handleWatchClick = (movie) => {
     setPlayingVideo({ id: movie.id, type: movie.media_type || (movie.first_air_date ? 'tv' : 'movie') });
-    // Saving last watched for resume feature!
     localStorage.setItem('cineflix_last_watched', JSON.stringify({
        title: movie.title || movie.name,
        movie: movie,
@@ -480,7 +528,6 @@ function MovieApp({ user, setAppState, setUser }) {
     }));
   };
 
-  // 🔥 FAST PARALLEL MATCHER CORE RUNNER 🔥
   const executeMagnetDownload = async (searchTasks, displayTitle) => {
     setIsDownloading(true);
     showToast(`🚀 Deep Scanning Global Trackers...\nConnecting to EZTV, PirateBay & Torrentio...`, 10000);
@@ -501,11 +548,9 @@ function MovieApp({ user, setAppState, setUser }) {
     }
   };
 
-  // 🔥 THE ACTUAL DOWNLOAD PROCESS (Runs after App check) 🔥
   const proceedToDownload = async (movie) => {
     const isTV = movie.media_type === 'tv' || movie.first_air_date;
 
-    // If TV show, open Seasons modal selector!
     if (isTV) {
       let details = singleMovieDetails;
       if (!details || !details.seasons) {
@@ -520,7 +565,6 @@ function MovieApp({ user, setAppState, setUser }) {
       return;
     }
 
-    // MOVIE DOWNLOAD LOGIC
     const title = movie.title || movie.name;
     const year = selectedMovie?.release_date ? selectedMovie.release_date.split('-')[0] : '';
     const cleanTitleStr = title.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -587,32 +631,24 @@ function MovieApp({ user, setAppState, setUser }) {
     executeMagnetDownload(tasks, title);
   };
 
-  // 🔥 INTERCEPT DOWNLOAD BUTTON TO CHECK FOR TORRENT APP & LOGIN 🔥
+  // 🔥 INTERCEPT DOWNLOAD BUTTON TO ALWAYS SHOW APP CHECKER MODAL 🔥
   const handleDownloadClick = (e, movie) => {
     e.preventDefault();
     if (isDownloading) return;
     
-    openAdSafely(); // Download ad trigger
+    openAdSafely(); 
 
-    // Check if Guest mode - Force Login
     if (!user) {
        showToast("⚠️ You need an account to Download! Please Sign In/Up.");
        sessionStorage.setItem('cineflix_pending_action', JSON.stringify({ action: 'download', movie }));
+       localStorage.removeItem('cineflix_guest_mode');
        setTimeout(() => setAppState('login'), 1500);
        return;
     }
 
-    // Check if user has already acknowledged having a torrent app
-    const hasApp = localStorage.getItem('cineflix_torrent_app_installed');
-    
-    if (!hasApp) {
-      // Show the High Quality Download Labs Guide!
-      setPendingDownloadMovie(movie);
-      setShowTorrentGuide(true);
-    } else {
-      // Proceed directly
-      proceedToDownload(movie);
-    }
+    // 💥 ALWAYS POP UP THE TORRENT APP CHECKER GUIDE MODAL!
+    setPendingDownloadMovie(movie);
+    setShowTorrentGuide(true);
   };
 
   const handleDownloadTVSeason = (seasonNumber) => {
@@ -624,7 +660,7 @@ function MovieApp({ user, setAppState, setUser }) {
     const imdbId = seasonSelectMovie.details?.imdb_id;
     const sPadded = seasonNumber < 10 ? `S0${seasonNumber}` : `S${seasonNumber}`;
     
-    setSeasonSelectMovie(null); // close modal
+    setSeasonSelectMovie(null);
 
     const fetchJsonFast = async (url) => {
       const controller = new AbortController();
@@ -702,16 +738,15 @@ function MovieApp({ user, setAppState, setUser }) {
     executeMagnetDownload(tvTasks, `${title} - Season ${seasonNumber}`);
   };
 
-  const copyAdGuard = () => {
-    navigator.clipboard.writeText('dns.adguard.com');
-    showToast("✅ Copied: dns.adguard.com\nGo to your network settings and paste it!");
-  };
+  const isBlurred = resumeData && !selectedMovie && !playingVideo;
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isBlurred ? 'bg-blur' : ''}`}>
       <style>
         {`
           .app-container { width: 100vw; min-height: 100vh; position: relative; background-color: #0b0b0b; color: #ffffff; padding-bottom: 70px; }
+          .bg-blur > header, .bg-blur > main, .bg-blur > nav, .bg-blur > .bottom-nav { filter: blur(8px); pointer-events: none; }
+          
           .banner-contents { padding: 0 1.25rem 1.5rem 1.25rem; max-width: 600px; z-index: 10; position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
           .user-badge { color: #E50914; font-weight: 700; font-size: 0.8rem; margin: 0 0 4px 0 !important; padding: 0 !important; text-transform: uppercase; letter-spacing: 1px; }
           .banner-title { font-size: clamp(1.8rem, 6vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0 !important; padding: 0 !important; text-transform: uppercase; line-height: 1.15; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
@@ -803,13 +838,6 @@ function MovieApp({ user, setAppState, setUser }) {
           .ad-guide-box { background: #141414; padding: 30px; border-radius: 20px; border: 1px solid #333; max-width: 500px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
           .ad-guide-box h2 { color: #E50914; font-family: 'Unbounded', sans-serif; font-size: 1.4rem; margin-bottom: 15px; }
           .ad-guide-box p { color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 20px; }
-          .guide-section { background: #1f1f1f; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
-          .guide-section h3 { color: #fff; font-size: 1.1rem; margin-bottom: 8px; }
-          .guide-section p { font-size: 0.85rem; margin-bottom: 10px; color: #aaa; }
-          .copy-box { display: flex; gap: 10px; }
-          .copy-box input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #111; color: #4ade80; font-weight: bold; font-family: monospace; }
-          .copy-box button { background: #E50914; color: #fff; border: none; padding: 0 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-          .copy-box button:hover { background: #c90812; }
           .got-it-btn { width: 100%; padding: 15px; background: #fff; color: #000; font-weight: bold; font-size: 1.1rem; border: none; border-radius: 8px; margin-top: 10px; cursor: pointer; transition: 0.2s; }
           .got-it-btn:hover { background: #e5e5e5; transform: scale(1.02); }
           .btn-cancel { background: #333 !important; color: white !important; }
@@ -923,12 +951,12 @@ function MovieApp({ user, setAppState, setUser }) {
         </div>
       )}
 
-      {/* 🔥 APP DOWNLOAD GUIDE MODAL (First Time Only) 🔥 */}
+      {/* 🔥 APP DOWNLOAD GUIDE MODAL (Opens EVERY TIME user clicks Download) 🔥 */}
       {showTorrentGuide && (
         <div className="ad-guide-overlay">
           <div className="ad-guide-box">
             <h2 style={{ color: '#fff', fontSize: '1.4rem' }}>🚀 HIGH QUALITY <span style={{ color: '#E50914' }}>DOWNLOAD LABS</span></h2>
-            <p>To download movies in 1080p/4K directly to your device, you need a Torrent App installed. Choose one below:</p>
+            <p>To download movies & TV series directly in 1080p/4K, make sure you have a Torrent App installed:</p>
             
             <div className="torrent-apps-grid">
               <a href="https://play.google.com/store/apps/details?id=com.utorrent.client" target="_blank" rel="noopener noreferrer" className="torrent-app-btn">
@@ -945,11 +973,16 @@ function MovieApp({ user, setAppState, setUser }) {
               </a>
             </div>
 
-            <button className="got-it-btn" style={{ background: '#E50914', color: '#fff', border: 'none' }} onClick={() => {
-              localStorage.setItem('cineflix_torrent_app_installed', 'true');
+            {/* 🔥 Start Download trigger button 🔥 */}
+            <button className="got-it-btn" style={{ background: '#E50914', color: '#fff', border: 'none', fontWeight: 'bold' }} onClick={() => {
               setShowTorrentGuide(false);
               proceedToDownload(pendingDownloadMovie);
-            }}>I already have a Torrent App ➡️</button>
+            }}>Start Download ➡️</button>
+
+            <button className="got-it-btn btn-cancel" style={{ marginTop: '10px' }} onClick={() => {
+              setShowTorrentGuide(false);
+              setPendingDownloadMovie(null);
+            }}>Cancel</button>
           </div>
         </div>
       )}
@@ -971,35 +1004,7 @@ function MovieApp({ user, setAppState, setUser }) {
               ))}
             </div>
 
-            <button className="got-it-btn" style={{ background: '#222', color: '#fff' }} onClick={() => setSeasonSelectMovie(null)}>Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {showAdGuide && (
-        <div className="ad-guide-overlay">
-          <div className="ad-guide-box">
-            <h2>💡 Tip: Watch Without Ads!</h2>
-            <p>Video players contain third-party ads. Here is how to block them forever for the best streaming experience:</p>
-            
-            <div className="guide-section">
-              <h3>📱 For Mobile:</h3>
-              <p>Go to your phone <b>Settings &gt; Connection &amp; Sharing &gt; Private DNS</b> and paste this code:</p>
-              <div className="copy-box">
-                <input type="text" readOnly value="dns.adguard.com" />
-                <button onClick={copyAdGuard}>Copy</button>
-              </div>
-            </div>
-
-            <div className="guide-section">
-              <h3>💻 For PC / Desktop:</h3>
-              <p>Install the <b>uBlock Origin</b> extension on Chrome, Edge or Safari.</p>
-            </div>
-
-            <button className="got-it-btn" onClick={() => {
-              setShowAdGuide(false);
-              localStorage.setItem('cineflix_ad_guide_shown', 'true');
-            }}>Got it, let's watch!</button>
+            <button className="got-it-btn btn-cancel" onClick={() => setSeasonSelectMovie(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -1008,7 +1013,15 @@ function MovieApp({ user, setAppState, setUser }) {
         <span className="mobile-logo">CINEFLIX</span>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           <svg onClick={() => setActiveTab('search')} style={{ width: '22px', height: '22px', fill: '#fff', cursor: 'pointer' }} viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
-          <svg onClick={handleLogout} style={{ width: '22px', height: '22px', fill: '#E50914', cursor: 'pointer' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" /></svg>
+          
+          {/* 🔥 GUEST & LOGIN ICON MOBILE 🔥 */}
+          <svg onClick={handleAuthAction} style={{ width: '22px', height: '22px', fill: '#E50914', cursor: 'pointer' }} viewBox="0 0 24 24">
+            {user ? (
+              <path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" />
+            ) : (
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+            )}
+          </svg>
         </div>
       </header>
 
@@ -1018,7 +1031,17 @@ function MovieApp({ user, setAppState, setUser }) {
         <svg onClick={() => setActiveTab('tv')} className={`nav-icon ${activeTab === 'tv' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" /></svg>
         <svg onClick={() => setActiveTab('movies')} className={`nav-icon ${activeTab === 'movies' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-2z" /></svg>
         <svg onClick={() => setActiveTab('trending')} className={`nav-icon ${activeTab === 'trending' ? 'active' : ''}`} viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" /></svg>
-        <div style={{ marginTop: 'auto', marginBottom: '20px' }}><svg onClick={handleLogout} className="nav-icon" title="Logout" style={{ fill: '#E50914' }} viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" /></svg></div>
+        <div style={{ marginTop: 'auto', marginBottom: '20px' }}>
+          
+          {/* 🔥 GUEST & LOGIN ICON DESKTOP 🔥 */}
+          <svg onClick={handleAuthAction} className="nav-icon" title={user ? "Logout" : "Login"} style={{ fill: '#E50914', cursor: 'pointer' }} viewBox="0 0 24 24">
+            {user ? (
+              <path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-9c-1.103 0-2 .897-2 2v4h2V5h9v14h-9v-4H9v4c0 1.103.897 2 2 2h9c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2z" />
+            ) : (
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+            )}
+          </svg>
+        </div>
       </nav>
 
       <div className="bottom-nav">
